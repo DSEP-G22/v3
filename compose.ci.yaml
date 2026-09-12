@@ -1,0 +1,26 @@
+# CI profile: docker compose -f compose.yaml -f compose.ci.yaml up -d --wait
+# No model images (translation, audio, image, knowledge): the orchestrator runs its built-in stubs
+# for those stages and control seeds the offline stub LLM. Everything else is the real stack.
+services:
+  translation: { profiles: [models] }
+  audio: { profiles: [models] }
+  image: { profiles: [models] }
+  knowledge: { profiles: [models] }
+
+  orchestrator:
+    environment:
+      TRANSLATE_URL: ""
+      ASR_URL: ""
+      VISION_URL: ""
+      DIAGNOSE_URL: ""
+    depends_on: !override
+      inquiry: { condition: service_healthy }
+      business: { condition: service_healthy }
+      triage: { condition: service_healthy }
+      grounding: { condition: service_healthy }
+      response: { condition: service_healthy }
+
+  control:
+    environment: { LANKA_LLM_IMPL: stub }
+  response:
+    environment: { TRANSLATE_URL: "" }

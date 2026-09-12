@@ -1,0 +1,545 @@
+# Static catalogue for the operator sandbox.
+#
+# Everything here is reference data that a real operator would hold in a product catalogue
+# or a network inventory. The per-subscriber volume (invoices, metrics, usage, tickets) is
+# generated in cst2/orgdata/seed.py from a fixed random seed, so a reseed reproduces the
+# same sandbox and a demo repeats exactly.
+#
+# The operator is a fixed and mobile provider trading as Lanka Link.
+
+operator:
+  name: Lanka Link
+  legal_name: Lanka Link Communications PLC
+  currency: LKR
+  support_hours: 24 hours a day, seven days a week
+  regions: [Western, Central, Southern, North Western, Northern]
+
+sla_tiers:
+  - tier: basic
+    display_name: Basic care
+    first_response_mins: 480
+    resolution_mins: 4320
+    credit_pct_on_breach: 0.0
+    priority_boost: 0
+  - tier: standard
+    display_name: Standard care
+    first_response_mins: 240
+    resolution_mins: 1440
+    credit_pct_on_breach: 5.0
+    priority_boost: 0
+  - tier: priority
+    display_name: Priority care
+    first_response_mins: 60
+    resolution_mins: 480
+    credit_pct_on_breach: 10.0
+    priority_boost: 10
+  - tier: enterprise
+    display_name: Enterprise assured
+    first_response_mins: 30
+    resolution_mins: 240
+    credit_pct_on_breach: 20.0
+    priority_boost: 20
+
+plans:
+  - code: MOBILEGO-25
+    family: MobileGo
+    display_name: MobileGo 25
+    tier: basic
+    technology: lte
+    monthly_price_lkr: 1490.00
+    data_cap_gb: 25
+    speed_down_mbps: 40
+    speed_up_mbps: 10
+    fup_threshold_pct: 90
+    fup_shaped_mbps: 2
+    contract_months: 0
+    early_exit_fee_lkr: 0
+    sla_tier: basic
+    sort_order: 10
+  - code: MOBILEGO-50
+    family: MobileGo
+    display_name: MobileGo 50
+    tier: standard
+    technology: lte
+    monthly_price_lkr: 2490.00
+    data_cap_gb: 50
+    speed_down_mbps: 60
+    speed_up_mbps: 15
+    fup_threshold_pct: 90
+    fup_shaped_mbps: 3
+    contract_months: 0
+    early_exit_fee_lkr: 0
+    sla_tier: basic
+    sort_order: 20
+  - code: HOMENET-100
+    family: HomeNet
+    display_name: HomeNet 100
+    tier: standard
+    technology: adsl
+    monthly_price_lkr: 4290.00
+    data_cap_gb: 500
+    speed_down_mbps: 100
+    speed_up_mbps: 20
+    fup_threshold_pct: 90
+    fup_shaped_mbps: 8
+    contract_months: 12
+    early_exit_fee_lkr: 6000.00
+    sla_tier: standard
+    sort_order: 30
+  - code: FIBREMAX-300
+    family: FibreMax
+    display_name: FibreMax 300
+    tier: premium
+    technology: gpon
+    monthly_price_lkr: 7490.00
+    data_cap_gb: -1
+    speed_down_mbps: 300
+    speed_up_mbps: 150
+    fup_threshold_pct: 95
+    fup_shaped_mbps: 50
+    contract_months: 12
+    early_exit_fee_lkr: 9000.00
+    sla_tier: priority
+    sort_order: 40
+  - code: FIBREMAX-1000
+    family: FibreMax
+    display_name: FibreMax 1000
+    tier: platinum
+    technology: gpon
+    monthly_price_lkr: 13900.00
+    data_cap_gb: -1
+    speed_down_mbps: 1000
+    speed_up_mbps: 500
+    fup_threshold_pct: 98
+    fup_shaped_mbps: 200
+    contract_months: 24
+    early_exit_fee_lkr: 18000.00
+    sla_tier: priority
+    sort_order: 50
+  - code: BIZFIBRE-500
+    family: BizFibre
+    display_name: BizFibre 500 assured
+    tier: platinum
+    technology: gpon
+    monthly_price_lkr: 28500.00
+    data_cap_gb: -1
+    speed_down_mbps: 500
+    speed_up_mbps: 500
+    fup_threshold_pct: 100
+    fup_shaped_mbps: 500
+    contract_months: 24
+    early_exit_fee_lkr: 45000.00
+    sla_tier: enterprise
+    sort_order: 60
+
+addons:
+  - code: STATIC_IP
+    display_name: Static IP address
+    monthly_price_lkr: 950.00
+  - code: SPORTS_PACK
+    display_name: Sports channel pack
+    monthly_price_lkr: 1250.00
+  - code: MESH_NODE
+    display_name: Additional mesh node
+    monthly_price_lkr: 690.00
+  - code: ROAMING_SAARC
+    display_name: SAARC roaming bundle
+    monthly_price_lkr: 1990.00
+  - code: PRIORITY_SUPPORT
+    display_name: Priority support upgrade
+    monthly_price_lkr: 1500.00
+
+entitlements:
+  - code: OUTAGE_CREDIT
+    display_name: Automatic credit for a qualifying outage
+    limit_unit: LKR
+  - code: GOODWILL_CREDIT
+    display_name: Goodwill credit at agent discretion
+    limit_unit: LKR
+  - code: SAME_DAY_ENGINEER
+    display_name: Same day engineer visit
+  - code: FREE_CPE_SWAP
+    display_name: Router replacement at no charge
+  - code: PLAN_CHANGE_ANYTIME
+    display_name: Change plan without an exit fee
+  - code: CONTRACT_PAUSE
+    display_name: Pause the contract for up to three months
+  - code: LATE_FEE_WAIVER
+    display_name: Late payment fee waiver
+
+exchanges:
+  - code: EX-CMB-CENTRAL
+    name: Colombo Central
+    region: Western
+    district: Colombo
+    commissioned_on: 2014-03-11
+  - code: EX-CMB-NORTH
+    name: Colombo North
+    region: Western
+    district: Colombo
+    commissioned_on: 2016-07-22
+  - code: EX-DEH-WELLA
+    name: Dehiwala Wellawatte
+    region: Western
+    district: Colombo
+    commissioned_on: 2015-11-04
+  - code: EX-GAM-KADA
+    name: Kadawatha
+    region: Western
+    district: Gampaha
+    commissioned_on: 2018-02-19
+  - code: EX-KAN-PERA
+    name: Peradeniya
+    region: Central
+    district: Kandy
+    commissioned_on: 2017-09-30
+  - code: EX-GAL-FORT
+    name: Galle Fort
+    region: Southern
+    district: Galle
+    commissioned_on: 2019-05-16
+  - code: EX-KUR-TOWN
+    name: Kurunegala Town
+    region: North Western
+    district: Kurunegala
+    commissioned_on: 2020-01-08
+
+device_models:
+  - model: LL-ONT-2400
+    vendor: Lanka Link
+    kind: ont
+    technologies: [gpon]
+    supports_wifi6: true
+    lan_ports: 4
+    latest_firmware: 4.2.7
+    replacement_model: LL-ONT-2600
+    known_issues:
+      - Firmware 4.1.2 reboots under sustained upload above 300 Mbps.
+    led_semantics:
+      - led: power
+        colour: green
+        behaviour: solid
+        meaning: Powered and running normally.
+        fault_id: null
+      - led: power
+        colour: red
+        behaviour: solid
+        meaning: Power supply fault. The unit is receiving no usable power.
+        fault_id: fault_power_supply
+      - led: power
+        colour: red
+        behaviour: blinking
+        meaning: The unit is restarting repeatedly, which points at a firmware crash loop.
+        fault_id: fault_firmware_crashloop
+      - led: pon
+        colour: green
+        behaviour: solid
+        meaning: Fibre is connected and the line has synchronised.
+        fault_id: null
+      - led: pon
+        colour: "off"
+        behaviour: "off"
+        meaning: No optical signal reaching the unit. Fibre is cut, unplugged, or the OLT is down.
+        fault_id: fault_cabling
+      - led: pon
+        colour: green
+        behaviour: blinking
+        meaning: The line is still synchronising. Normal for up to two minutes after a restart.
+        fault_id: fault_line_sync
+      - led: internet
+        colour: amber
+        behaviour: solid
+        meaning: The line is up but the service is not authenticated, which usually means the account is barred.
+        fault_id: fault_service_suspended
+      - led: internet
+        colour: "off"
+        behaviour: "off"
+        meaning: No internet service on an otherwise live line.
+        fault_id: fault_no_dial_tone
+    port_layout:
+      - port: POWER
+        colour: black
+        position: far left, round socket
+        accepts: the power adapter lead
+      - port: PON
+        colour: green
+        position: left of the yellow sockets, small round socket with a dust cap
+        accepts: the thin fibre lead coming from the small box on the wall
+      - port: LAN1
+        colour: yellow
+        position: first of the four yellow sockets
+        accepts: a network cable to a computer, TV box or WiFi extender
+      - port: LAN2
+        colour: yellow
+        position: second yellow socket
+        accepts: a second network cable
+      - port: LAN3
+        colour: yellow
+        position: third yellow socket
+        accepts: a third network cable
+      - port: LAN4
+        colour: yellow
+        position: fourth yellow socket
+        accepts: a fourth network cable
+      - port: TEL
+        colour: grey
+        position: far right
+        accepts: a telephone handset cable
+    remedies:
+      fault_cabling:
+        steps:
+          - Find the thin fibre lead that runs from the small box on the wall to the router.
+          - Check both ends are pushed in fully until they click. The router end is the green PON socket, the small round socket to the left of the four yellow ones.
+          - If the lead has come out, line the connector up with the notch facing up and press it in gently. Never force it, and never bend the fibre tightly, because it breaks.
+          - Wait two minutes, then look at the PON light. Solid green means the line is back.
+        escalate_if: The PON light is still off after the lead has been pushed back in at both ends, or the fibre lead looks kinked, crushed or has a broken connector.
+      fault_power_supply:
+        steps:
+          - Check the power adapter is pushed firmly into the round black socket at the far left of the unit, and into the wall.
+          - Try a different wall socket that you know works.
+          - Switch the unit off at the wall for thirty seconds, then on again.
+        escalate_if: The power light stays red or stays off after a second wall socket has been tried.
+      fault_firmware_crashloop:
+        steps:
+          - Leave the unit powered on and connected. The firmware correction is sent to it remotely and it will restart on its own.
+        escalate_if: The unit is still restarting after the firmware update has been applied.
+      fault_line_sync:
+        steps:
+          - Leave the unit powered on and wait two minutes while the line settles.
+        escalate_if: The PON light is still blinking after five minutes.
+      fault_service_suspended:
+        steps:
+          - Nothing needs to be done to the router. The line itself is working, and the service comes back on its own once the account is settled.
+        escalate_if: The internet light is still amber more than an hour after the balance was cleared.
+      fault_no_dial_tone:
+        steps:
+          - Switch the unit off at the wall for thirty seconds, then on again, and wait two minutes.
+        escalate_if: The internet light is still off after the restart.
+  - model: LL-ONT-2600
+    vendor: Lanka Link
+    kind: ont
+    technologies: [gpon]
+    supports_wifi6: true
+    lan_ports: 4
+    latest_firmware: 5.0.3
+    replacement_model: null
+    known_issues: []
+    led_semantics:
+      - led: power
+        colour: green
+        behaviour: solid
+        meaning: Powered and running normally.
+        fault_id: null
+      - led: power
+        colour: red
+        behaviour: solid
+        meaning: Power supply fault. The unit is receiving no usable power.
+        fault_id: fault_power_supply
+      - led: pon
+        colour: "off"
+        behaviour: "off"
+        meaning: No optical signal reaching the unit.
+        fault_id: fault_cabling
+      - led: internet
+        colour: amber
+        behaviour: solid
+        meaning: The line is up but the service is barred, which usually means an unpaid balance.
+        fault_id: fault_service_suspended
+    port_layout:
+      - port: POWER
+        colour: black
+        position: far left, round socket
+        accepts: the power adapter lead
+      - port: PON
+        colour: green
+        position: left of the yellow sockets, small round socket with a dust cap
+        accepts: the thin fibre lead coming from the small box on the wall
+      - port: LAN1
+        colour: yellow
+        position: first of the four yellow sockets
+        accepts: a network cable to a computer, TV box or WiFi extender
+      - port: LAN2
+        colour: yellow
+        position: second yellow socket
+        accepts: a second network cable
+      - port: LAN3
+        colour: yellow
+        position: third yellow socket
+        accepts: a third network cable
+      - port: LAN4
+        colour: yellow
+        position: fourth yellow socket
+        accepts: a fourth network cable
+    remedies:
+      fault_cabling:
+        steps:
+          - Find the thin fibre lead that runs from the small box on the wall to the router.
+          - Check both ends are pushed in fully until they click. The router end is the green PON socket, the small round socket to the left of the four yellow ones.
+          - If the lead has come out, line the connector up with the notch facing up and press it in gently. Never force it, and never bend the fibre tightly, because it breaks.
+          - Wait two minutes, then look at the PON light. Solid green means the line is back.
+        escalate_if: The PON light is still off after the lead has been pushed back in at both ends, or the fibre lead looks kinked, crushed or has a broken connector.
+      fault_power_supply:
+        steps:
+          - Check the power adapter is pushed firmly into the round black socket at the far left of the unit, and into the wall.
+          - Try a different wall socket that you know works.
+          - Switch the unit off at the wall for thirty seconds, then on again.
+        escalate_if: The power light stays red or stays off after a second wall socket has been tried.
+      fault_service_suspended:
+        steps:
+          - Nothing needs to be done to the router. The line itself is working, and the service comes back on its own once the account is settled.
+        escalate_if: The internet light is still amber more than an hour after the balance was cleared.
+  - model: ZY-VMG-3625
+    vendor: Zyxel
+    kind: gateway
+    technologies: [adsl, vdsl]
+    supports_wifi6: false
+    lan_ports: 4
+    latest_firmware: 2.11.4
+    replacement_model: LL-ONT-2600
+    known_issues:
+      - Loses DSL sync on long copper runs when line attenuation exceeds 45 dB.
+    led_semantics:
+      - led: power
+        colour: green
+        behaviour: solid
+        meaning: Powered and running normally.
+        fault_id: null
+      - led: power
+        colour: red
+        behaviour: solid
+        meaning: Power supply fault.
+        fault_id: fault_power_supply
+      - led: dsl
+        colour: green
+        behaviour: blinking
+        meaning: The copper line is trying to synchronise and has not settled.
+        fault_id: fault_line_sync
+      - led: dsl
+        colour: "off"
+        behaviour: "off"
+        meaning: No DSL signal at all. Cabling fault or an exchange side problem.
+        fault_id: fault_cabling
+      - led: internet
+        colour: amber
+        behaviour: solid
+        meaning: Sync is up but authentication failed, commonly a barred account.
+        fault_id: fault_service_suspended
+    port_layout:
+      - port: POWER
+        colour: black
+        position: far left, round socket
+        accepts: the power adapter lead
+      - port: DSL
+        colour: grey
+        position: next to the power socket, small square socket
+        accepts: the thin telephone style cable running to the wall socket
+      - port: LAN1
+        colour: yellow
+        position: first of the four yellow sockets
+        accepts: a network cable to a computer or TV box
+      - port: LAN2
+        colour: yellow
+        position: second yellow socket
+        accepts: a second network cable
+      - port: LAN3
+        colour: yellow
+        position: third yellow socket
+        accepts: a third network cable
+      - port: LAN4
+        colour: yellow
+        position: fourth yellow socket
+        accepts: a fourth network cable
+    remedies:
+      fault_cabling:
+        steps:
+          - Find the thin telephone style cable running from the wall socket to the router.
+          - Push it firmly into the grey DSL socket, the small square socket next to the power lead, until it clicks.
+          - Check the wall socket end is pushed in as well, and that the cable does not run through a splitter or an extension lead.
+          - Wait two minutes, then look at the DSL light. Solid green means the line is back.
+        escalate_if: The DSL light is still off after the cable has been pushed back in at both ends.
+      fault_line_sync:
+        steps:
+          - Leave the router powered on and wait five minutes while the copper line settles.
+          - If it is still blinking, unplug any telephone extension leads and splitters and connect the router straight to the wall socket.
+        escalate_if: The DSL light is still blinking after the router has been connected directly to the wall socket.
+      fault_power_supply:
+        steps:
+          - Check the power adapter is pushed firmly into the round black socket at the far left of the unit, and into the wall.
+          - Try a different wall socket that you know works.
+          - Switch the unit off at the wall for thirty seconds, then on again.
+        escalate_if: The power light stays red or stays off after a second wall socket has been tried.
+      fault_service_suspended:
+        steps:
+          - Nothing needs to be done to the router. The line itself is working, and the service comes back on its own once the account is settled.
+        escalate_if: The internet light is still amber more than an hour after the balance was cleared.
+  - model: HW-B535-232
+    vendor: Huawei
+    kind: dongle
+    technologies: [lte]
+    supports_wifi6: false
+    lan_ports: 1
+    latest_firmware: 11.0.1
+    replacement_model: null
+    known_issues: []
+    led_semantics:
+      - led: signal
+        colour: green
+        behaviour: solid
+        meaning: Strong mobile signal.
+        fault_id: null
+      - led: signal
+        colour: red
+        behaviour: blinking
+        meaning: No usable mobile signal at this location.
+        fault_id: fault_no_coverage
+      - led: power
+        colour: red
+        behaviour: solid
+        meaning: Power supply fault.
+        fault_id: fault_power_supply
+
+    port_layout:
+      - port: POWER
+        colour: black
+        position: far left, round socket
+        accepts: the power adapter lead
+      - port: LAN
+        colour: yellow
+        position: single yellow socket
+        accepts: a network cable to a computer or TV box
+      - port: SIM
+        colour: black
+        position: under the back cover
+        accepts: the SIM card, gold contacts facing down
+    remedies:
+      fault_no_coverage:
+        steps:
+          - Move the unit next to a window, or to the highest floor of the building. The signal is much weaker inside thick walls.
+          - Leave it in the new position for two minutes and watch the signal light.
+          - If it is still red, switch the unit off for thirty seconds and on again so it searches for the network from scratch.
+        escalate_if: The signal light stays red after the unit has been moved next to a window and restarted.
+      fault_power_supply:
+        steps:
+          - Check the power adapter is pushed firmly into the round black socket at the far left of the unit, and into the wall.
+          - Try a different wall socket that you know works.
+          - Switch the unit off at the wall for thirty seconds, then on again.
+        escalate_if: The power light stays red or stays off after a second wall socket has been tried.
+known_issues:
+  - id: KI-2026-004
+    title: LL-ONT-2400 reboot loop on firmware 4.1.2
+    applies_to_models: [LL-ONT-2400]
+    applies_to_faults: [fault_firmware_crashloop]
+    symptom: The power light blinks red and the unit restarts every few minutes under upload load.
+    workaround: Push firmware 4.2.7, which corrects the watchdog timeout.
+    permanent_fix: Firmware 4.2.7, released in March 2026.
+    open_since: 2026-01-14
+    resolved_on: 2026-03-02
+  - id: KI-2026-011
+    title: Evening congestion on OLT-CMB-03 uplink
+    applies_to_models: []
+    applies_to_faults: [fault_intermittent_connection]
+    symptom: Throughput falls sharply between 8 pm and 11 pm for subscribers on the Colombo Central OLT.
+    workaround: Confirm the uplink utilisation figure before dispatching an engineer, because the line itself is healthy.
+    permanent_fix: Uplink capacity upgrade scheduled for the second quarter.
+    open_since: 2026-06-19
+    resolved_on: null

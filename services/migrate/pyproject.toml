@@ -1,0 +1,11 @@
+[project]
+name = "lanka-migrate"
+version = "3.0.0"
+requires-python = ">=3.12"
+dependencies = ["lanka-common", "asyncpg>=0.29"]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+lanka-common = { workspace = true }

@@ -1,0 +1,99 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --all-packages
+      - run: uv run ruff check .
+      - run: uv run pytest packages -q
+      - run: cd services/gateway && uv run python -m pytest tests -q
+      - run: cd services/business && uv run python -m pytest tests -q && uv run python -m app.clock
+      - run: cd services/inquiry && uv run python -m pytest tests -q
+      - run: cd services/orchestrator && uv run python -m app.fusion
+      - run: cd services/triage && uv run python -m pytest tests -q
+      - run: cd services/translation && uv run python -m pytest tests -q
+      - run: cd services/audio && uv run python -m app.confidence
+      - run: cd services/image && uv run python -m app.led
+      - run: cd services/business && uv run python -m app.fixtures ../grounding/tests/fixtures/prefetch.json
+      - run: cd services/grounding && uv run python -m pytest tests -q
+      - run: cd services/knowledge && uv run python -m app.diagnose
+      - run: cd services/response && uv run python -m app.policy
+      - run: uv run pytest tests/architecture -q
+
+  auth:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: services/auth } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm install --no-audit --no-fund
+      - run: npm run build
+      - run: npm test
+
+  web:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: web } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm ci --no-audit --no-fund
+      - run: npx tsc --noEmit
+      - name: No mock data in the web app
+        run: "! grep -rEn 'faker|mockData|placeholderData' app components lib"
+      - run: npm run build
+
+  e2e:
+    # Needs repo secrets NEON_KEY (a Neon branch) and BETTER_AUTH_SECRET; skipped without them.
+    runs-on: ubuntu-latest
+    needs: [python, web]
+    env:
+      NEON_KEY: ${{ secrets.NEON_KEY }}
+      BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+        if: env.NEON_KEY != ''
+      - if: env.NEON_KEY != ''
+        run: |
+          cp .env.example .env
+          sed -i "s|^NEON_KEY=.*|NEON_KEY=${NEON_KEY}|; s|^BETTER_AUTH_SECRET=.*|BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}|" .env
+          docker compose -f compose.yaml -f compose.ci.yaml up -d --build --wait
+      - if: env.NEON_KEY != ''
+        uses: astral-sh/setup-uv@v6
+      - if: env.NEON_KEY != ''
+        run: |
+          bash scripts/smoke.sh
+          uv run --with httpx python scripts/verify_hot_swap.py
+          uv run --with httpx python scripts/demo_flow.py
+      - if: env.NEON_KEY != ''
+        working-directory: web
+        run: npm ci --no-audit --no-fund && npx playwright install --with-deps chromium && npx playwright test
+      - if: env.NEON_KEY != ''
+        run: bash scripts/load.sh
+      - if: failure() && env.NEON_KEY != ''
+        run: docker compose logs --no-color --tail 200
+
+  gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - run: python scripts/check_no_em_dashes.py
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  compose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cp .env.example .env && docker compose config -q
