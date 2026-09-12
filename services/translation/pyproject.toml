@@ -1,0 +1,16 @@
+[project]
+name = "lanka-translation"
+version = "3.0.0"
+requires-python = ">=3.12"
+dependencies = ["lanka-common", "fastapi>=0.115", "uvicorn[standard]>=0.30", "pydantic>=2.6"]
+
+[project.optional-dependencies]
+# Runtime model stack (baked into the image); tests run without it.
+models = ["ctranslate2>=4.4", "transformers>=4.44", "sentencepiece>=0.2"]
+google = ["deep-translator>=1.11"]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+lanka-common = { workspace = true }

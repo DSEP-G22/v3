@@ -1,0 +1,161 @@
+# Which organisational data tools get called for which kind of ticket.
+#
+# This is the file that decides what the LLM is allowed to know about a customer. It is
+# deliberately data, not agent choice: an agent given the tools and left to pick will stop
+# as soon as one of them appears to answer the literal question, which for a connectivity
+# complaint means reading the network status, seeing the line is down, and never checking
+# whether the account was barred for non payment three days ago.
+#
+# The plan resolves in two layers. The department gives a base list; the diagnosed fault
+# adds to it. Order inside a list is preserved, and the ContextBundle then regroups the
+# results into identity, commercial, network, history before the prompt renders them.
+#
+# required_sections gates the draft. A section named there that comes back empty makes the
+# bundle insufficient, and the response service raises NO_DRAFT rather than writing a
+# confident reply around a hole.
+#
+# Seeded into v2_grounding_plan on first run, then editable in the administration console.
+# The database copy wins, because a plan edit has to reach every running grounding service
+# without a redeploy.
+
+by_department:
+
+  network_operations:
+    required_sections: [identity, payment, network]
+    tools:
+      - get_subscriber_profile
+      - get_circuit_status
+      - get_cpe_diagnostics
+      - get_line_quality
+      - get_active_outages_for
+      - get_planned_work_for
+      # Not optional, and not obvious. A barred account is the most common cause of a line
+      # that stopped working, and it presents identically to a fault.
+      - get_payment_status
+      - get_plan_and_entitlements
+      - get_prior_tickets
+
+  technical_support:
+    required_sections: [identity, network]
+    tools:
+      - get_subscriber_profile
+      - get_cpe_diagnostics
+      - get_circuit_status
+      - get_line_quality
+      # Both of these belong in every department that fields a service complaint, not only
+      # in network operations. An open incident is the commonest external cause of a line
+      # that stopped working, and which queue the classifier happened to pick does not
+      # change whether one is running. Leaving them out of this plan meant a connectivity
+      # complaint routed to technical support never checked, and the reply blamed the
+      # customer's equipment for an outage on ours.
+      - get_active_outages_for
+      - get_planned_work_for
+      - get_payment_status
+      - get_plan_and_entitlements
+      - get_usage_summary
+      - get_prior_tickets
+
+  billing:
+    required_sections: [identity, payment, invoice]
+    tools:
+      - get_subscriber_profile
+      - get_account_balance
+      - get_last_invoice_breakdown
+      - get_billing_history
+      - get_payment_status
+      - get_plan_and_entitlements
+      - get_usage_summary
+
+  field_service:
+    required_sections: [identity, network, field]
+    tools:
+      - get_subscriber_profile
+      - get_circuit_status
+      - get_cpe_diagnostics
+      - get_line_quality
+      - get_open_work_orders
+      - get_next_appointment_slots
+      - get_active_outages_for
+      - get_plan_and_entitlements
+      - get_prior_tickets
+
+  retention:
+    required_sections: [identity, plan]
+    tools:
+      - get_subscriber_profile
+      - get_plan_and_entitlements
+      - get_billing_history
+      - get_usage_summary
+      - get_prior_tickets
+      - get_sla_position
+
+  sales:
+    required_sections: [identity, plan]
+    tools:
+      - get_subscriber_profile
+      - get_plan_and_entitlements
+      - get_usage_summary
+      - get_account_balance
+
+  general:
+    required_sections: [identity]
+    tools:
+      - get_subscriber_profile
+      - get_payment_status
+      - get_plan_and_entitlements
+      - get_prior_tickets
+
+by_fault:
+
+  fault_line_sync:
+    tools: [get_line_quality, get_cpe_diagnostics]
+
+  fault_intermittent_connection:
+    tools: [get_line_quality, get_active_outages_for, get_planned_work_for]
+
+  fault_cabling:
+    tools: [get_line_quality, get_open_work_orders, get_next_appointment_slots]
+
+  fault_hardware:
+    tools: [get_cpe_diagnostics, get_open_work_orders, get_next_appointment_slots]
+
+  fault_power_supply:
+    tools: [get_cpe_diagnostics, get_next_appointment_slots]
+
+  fault_firmware_crashloop:
+    tools: [get_cpe_diagnostics]
+
+  fault_service_suspended:
+    tools: [get_payment_status, get_ledger_window]
+
+  fault_billing_dispute:
+    tools: [get_last_invoice_breakdown, get_ledger_window, get_billing_history]
+
+  fault_no_dial_tone:
+    tools: [get_circuit_status, get_line_quality, get_active_outages_for]
+
+  fault_no_coverage:
+    tools: [get_circuit_status, get_active_outages_for]
+
+# Which tool results satisfy which required section. A section counts as present when any
+# one of its tools returned found and did not error.
+sections:
+  identity: [get_subscriber_profile]
+  payment: [get_payment_status, get_account_balance]
+  invoice: [get_last_invoice_breakdown, get_billing_history, get_ledger_window]
+  plan: [get_plan_and_entitlements, get_usage_summary]
+  network: [get_circuit_status, get_cpe_diagnostics, get_line_quality]
+  outage: [get_active_outages_for, get_planned_work_for]
+  field: [get_open_work_orders, get_next_appointment_slots]
+  history: [get_prior_tickets, get_sla_position]
+
+# Tools that take arguments beyond subscriber_ref, and where those arguments come from.
+# Anything not listed here is called with subscriber_ref alone.
+tool_arguments:
+  get_billing_history: {months: 6}
+  get_ledger_window: {days: 120}
+  get_usage_summary: {days: 30}
+  get_line_quality: {hours: settings.grounding_line_metric_hours}
+  get_prior_tickets: {limit: settings.grounding_prior_ticket_limit}
+  get_next_appointment_slots: {days: 7}
+  get_sla_position: {opened_at: ticket.created_at}

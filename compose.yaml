@@ -1,0 +1,313 @@
+name: lanka-link-v3
+
+x-image: &img ghcr.io/${GHCR_OWNER:-local}/lanka-link-v3
+
+services:
+  edge:
+    image: caddy:2-alpine
+    ports: ["8080:8080"]
+    volumes:
+      - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  nats:
+    image: nats:2-alpine
+    command: ["-c", "/etc/nats/nats.conf"]
+    volumes:
+      - ./infra/nats/nats.conf:/etc/nats/nats.conf:ro
+      - nats-data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8222/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  valkey:
+    image: valkey/valkey:8-alpine
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  timescaledb:
+    # ponytail: slim image, not -ha (multi-GB); swap back if HA tooling (patroni, toolkit) is needed
+    image: timescale/timescaledb:latest-pg17
+    environment:
+      POSTGRES_PASSWORD: ${TIMESCALE_PASSWORD:-timescale}
+      POSTGRES_DB: telemetry
+    volumes:
+      - timescale-data:/var/lib/postgresql/data
+      - ./infra/timescale/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d telemetry"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-lanka}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-lanka-minio-secret}
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  migrate:
+    image: ghcr.io/${GHCR_OWNER:-local}/lanka-link-v3-migrate:${V3_TAG:-latest}
+    build: { context: ., dockerfile: services/migrate/Dockerfile }
+    env_file: .env
+    environment:
+      TIMESCALE_URL: postgresql://postgres:${TIMESCALE_PASSWORD:-timescale}@timescaledb:5432/telemetry
+    depends_on:
+      timescaledb: { condition: service_healthy }
+    restart: "no"
+
+  # One-shot, idempotent: org tables + deterministic genesis + telemetry backfill.
+  seed:
+    image: ghcr.io/${GHCR_OWNER:-local}/lanka-link-v3-business:${V3_TAG:-latest}
+    build: { context: ., dockerfile: services/business/Dockerfile }
+    command: ["python", "-m", "app.genesis"]
+    env_file: .env
+    environment:
+      TIMESCALE_URL: postgresql://postgres:${TIMESCALE_PASSWORD:-timescale}@timescaledb:5432/telemetry
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    restart: "no"
+
+  auth:
+    image: ghcr.io/${GHCR_OWNER:-local}/lanka-link-v3-auth:${V3_TAG:-latest}
+    build: { context: ., dockerfile: services/auth/Dockerfile }
+    env_file: .env
+    environment:
+      BETTER_AUTH_URL: ${PUBLIC_URL:-http://localhost:8080}
+      # Required; auth refuses to boot without it (checked in services/auth/src/auth.ts).
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-}
+      NATS_URL: nats://nats:4222
+    depends_on:
+      nats: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
+    restart: unless-stopped
+
+  gateway:
+    image: ghcr.io/${GHCR_OWNER:-local}/lanka-link-v3-gateway:${V3_TAG:-latest}
+    build: { context: ., dockerfile: services/gateway/Dockerfile }
+    environment:
+      BETTER_AUTH_URL: ${PUBLIC_URL:-http://localhost:8080}
+      AUTH_INTERNAL_URL: http://auth:3000
+      BUSINESS_URL: http://business:8000
+      PAYMENTS_URL: http://payments:8000
+      INQUIRY_URL: http://inquiry:8000
+      ORCHESTRATOR_URL: http://orchestrator:8000
+      GROUNDING_URL: http://grounding:8000
+      RESPONSE_URL: http://response:8000
+      CONTROL_URL: http://control:8000
+      VALKEY_URL: redis://valkey:6379/0
+      NATS_URL: nats://nats:4222
+    depends_on:
+      inquiry: { condition: service_healthy }
+      orchestrator: { condition: service_healthy }
+      grounding: { condition: service_healthy }
+      response: { condition: service_healthy }
+      control: { condition: service_healthy }
+      auth: { condition: service_healthy }
+      valkey: { condition: service_healthy }
+      business: { condition: service_healthy }
+      payments: { condition: service_healthy }
+    restart: unless-stopped
+
+  business:
+    image: ghcr.io/${GHCR_OWNER:-local}/lanka-link-v3-business:${V3_TAG:-latest}
+    build: { context: ., dockerfile: services/business/Dockerfile }
+    env_file: .env
+    environment: &business-env
+      TIMESCALE_URL: postgresql://postgres:${TIMESCALE_PASSWORD:-timescale}@timescaledb:5432/telemetry
+      NATS_URL: nats://nats:4222
+    depends_on:
+      seed: { condition: service_completed_successfully }
+      nats: { condition: service_healthy }
+    restart: unless-stopped
+
+  # Same image as business, worker mode: the sim clock tick loop.
+  business-sim:
+    image: ghcr.io/${GHCR_OWNER:-local}/lanka-link-v3-business:${V3_TAG:-latest}
+    command: ["python", "-m", "app.sim"]
+    env_file: .env
+    environment: *business-env
+    depends_on:
+      seed: { condition: service_completed_successfully }
+      nats: { condition: service_healthy }
+    healthcheck: { disable: true }
+    restart: unless-stopped
+
+  payments:
+    image: ghcr.io/${GHCR_OWNER:-local}/lanka-link-v3-payments:${V3_TAG:-latest}
+    build: { context: ., dockerfile: services/payments/Dockerfile }
+    env_file: .env
+    environment:
+      NATS_URL: nats://nats:4222
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      nats: { condition: service_healthy }
+    restart: unless-stopped
+
+  inquiry:
+    image: ghcr.io/${GHCR_OWNER:-local}/lanka-link-v3-inquiry:${V3_TAG:-latest}
+    build: { context: ., dockerfile: services/inquiry/Dockerfile }
+    env_file: .env
+    environment:
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-lanka}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-lanka-minio-secret}
+      VALKEY_URL: redis://valkey:6379/0
+      NATS_URL: nats://nats:4222
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      minio: { condition: service_healthy }
+      nats: { condition: service_healthy }
+      valkey: { condition: service_healthy }
+    restart: unless-stopped
+
+  orchestrator:
+    image: ghcr.io/${GHCR_OWNER:-local}/lanka-link-v3-orchestrator:${V3_TAG:-latest}
+    build: { context: ., dockerfile: services/orchestrator/Dockerfile }
+    env_file: .env
+    environment:
+      BUSINESS_URL: http://business:8000
+      NATS_URL: nats://nats:4222
+      INQUIRY_URL: http://inquiry:8000
+      DIAGNOSE_URL: http://knowledge:8000
+      GROUNDING_URL: http://grounding:8000
+      RESPONSE_URL: http://response:8000
+      TRANSLATE_URL: http://translation:8000
+      TRIAGE_URL: http://triage:8000
+      ASR_URL: http://audio:8000
+      VISION_URL: http://image:8000
+    depends_on:
+      inquiry: { condition: service_healthy }
+      business: { condition: service_healthy }
+      translation: { condition: service_healthy }
+      triage: { condition: service_healthy }
+      audio: { condition: service_healthy }
+      image: { condition: service_healthy }
+      knowledge: { condition: service_healthy }
+      grounding: { condition: service_healthy }
+      response: { condition: service_healthy }
+    restart: unless-stopped
+
+  control:
+    image: ghcr.io/${GHCR_OWNER:-local}/lanka-link-v3-control:${V3_TAG:-latest}
+    build: { context: ., dockerfile: services/control/Dockerfile }
+    env_file: .env
+    environment: &llm-env
+      NATS_URL: nats://nats:4222
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      OLLAMA_API_KEY: ${OLLAMA_API_KEY:-}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      nats: { condition: service_healthy }
+    restart: unless-stopped
+
+  knowledge:
+    image: ghcr.io/${GHCR_OWNER:-local}/lanka-link-v3-knowledge:${V3_TAG:-latest}
+    build: { context: ., dockerfile: services/knowledge/Dockerfile }
+    environment:
+      <<: *llm-env
+      CONTROL_URL: http://control:8000
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    cpus: 1
+    depends_on:
+      control: { condition: service_healthy }
+    restart: unless-stopped
+
+  grounding:
+    image: ghcr.io/${GHCR_OWNER:-local}/lanka-link-v3-grounding:${V3_TAG:-latest}
+    build: { context: ., dockerfile: services/grounding/Dockerfile }
+    env_file: .env
+    environment:
+      NATS_URL: nats://nats:4222
+      BUSINESS_URL: http://business:8000
+      CONTROL_URL: http://control:8000
+    depends_on:
+      control: { condition: service_healthy }
+      business: { condition: service_healthy }
+    restart: unless-stopped
+
+  response:
+    image: ghcr.io/${GHCR_OWNER:-local}/lanka-link-v3-response:${V3_TAG:-latest}
+    build: { context: ., dockerfile: services/response/Dockerfile }
+    env_file: .env
+    environment:
+      <<: *llm-env
+      GROUNDING_URL: http://grounding:8000
+      CONTROL_URL: http://control:8000
+      TRANSLATE_URL: http://translation:8000
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    depends_on:
+      control: { condition: service_healthy }
+      grounding: { condition: service_healthy }
+    restart: unless-stopped
+
+  audio:
+    image: ghcr.io/${GHCR_OWNER:-local}/lanka-link-v3-audio:${V3_TAG:-latest}
+    build: { context: ., dockerfile: services/audio/Dockerfile }
+    environment:
+      INQUIRY_URL: http://inquiry:8000
+      TRANSLATE_URL: http://translation:8000
+      OMP_NUM_THREADS: "4"
+    cpus: 4
+    restart: unless-stopped
+
+  image:
+    image: ghcr.io/${GHCR_OWNER:-local}/lanka-link-v3-image:${V3_TAG:-latest}
+    build: { context: ., dockerfile: services/image/Dockerfile }
+    environment:
+      INQUIRY_URL: http://inquiry:8000
+      OMP_NUM_THREADS: "1"
+    cpus: 1
+    restart: unless-stopped
+
+  translation:
+    image: ghcr.io/${GHCR_OWNER:-local}/lanka-link-v3-translation:${V3_TAG:-latest}
+    build: { context: ., dockerfile: services/translation/Dockerfile }
+    environment:
+      OMP_NUM_THREADS: "4"
+      LANKA_TR_BACKEND: ${LANKA_TR_BACKEND:-auto}
+    cpus: 4
+    restart: unless-stopped
+
+  triage:
+    image: ghcr.io/${GHCR_OWNER:-local}/lanka-link-v3-triage:${V3_TAG:-latest}
+    build: { context: ., dockerfile: services/triage/Dockerfile }
+    restart: unless-stopped
+
+  web:
+    image: ghcr.io/${GHCR_OWNER:-local}/lanka-link-v3-web:${V3_TAG:-latest}
+    build: { context: ., dockerfile: web/Dockerfile }
+    environment:
+      GATEWAY_INTERNAL_URL: http://gateway:8000
+    depends_on:
+      gateway: { condition: service_healthy }
+    restart: unless-stopped
+
+volumes:
+  nats-data:
+  timescale-data:
+  minio-data:

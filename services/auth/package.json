@@ -1,0 +1,25 @@
+{
+  "name": "lanka-auth",
+  "version": "3.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "test": "tsx --test src/*.test.ts"
+  },
+  "dependencies": {
+    "@hono/node-server": "2.1.1",
+    "@nats-io/transport-node": "^3.0.0",
+    "better-auth": "1.7.4",
+    "hono": "4.13.7",
+    "pg": "8.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "@types/pg": "^8",
+    "tsx": "^4",
+    "typescript": "^5"
+  }
+}

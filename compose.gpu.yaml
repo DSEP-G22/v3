@@ -1,0 +1,42 @@
+# GPU profile: docker compose -f compose.yaml -f compose.gpu.yaml up -d
+# Needs the NVIDIA container toolkit. whisper fp16 ~1 GB, NLLB int8_float16 ~0.8 GB of VRAM.
+x-gpu: &gpu
+  deploy:
+    resources:
+      reservations:
+        devices: [{ driver: nvidia, count: all, capabilities: [gpu] }]
+
+services:
+  ollama:
+    image: ollama/ollama
+    volumes: [ollama-data:/root/.ollama]
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+    <<: *gpu
+
+  # ponytail: CPU images with CUDA switched on; ship -cuda image tags if the base lacks the runtime libs.
+  audio:
+    environment: { ASR_DEVICE: cuda }
+    cpus: 2
+    <<: *gpu
+  translation:
+    environment: { LANKA_TR_DEVICE: cuda }
+    cpus: 2
+    <<: *gpu
+  image:
+    environment: { VISION_DEVICE: cuda }
+    <<: *gpu
+
+  control:
+    environment: { OLLAMA_BASE_URL: http://ollama:11434 }
+  knowledge:
+    environment: { OLLAMA_BASE_URL: http://ollama:11434 }
+  response:
+    environment: { OLLAMA_BASE_URL: http://ollama:11434 }
+
+volumes:
+  ollama-data:

@@ -1,0 +1,32 @@
+# secrets: .env holds a live Neon password, never commit it
+.env
+.env.*
+!.env.example
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+uv.lock.bak
+
+# node / web
+node_modules/
+.next/
+dist/
+coverage/
+playwright-report/
+test-results/
+
+# exported model files (sources live in LFS under models/)
+models/export/
+*.onnx
+*.ct2/
+
+# local data
+*.db
+data/
+
+PLAN.md

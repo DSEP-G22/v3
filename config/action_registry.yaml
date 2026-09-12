@@ -1,0 +1,149 @@
+# Actions the system may recommend, extending v1's five with operator actions the sandbox
+# can genuinely execute.
+#
+# Two differences from v1/config/action_registry.yaml, both deliberate:
+#
+# 1. The field names match the runtime type. v1's YAML says faults, permits.requires_fields
+#    and permits.max_*, while libs/domain/policy/action_selection.py::ActionRegistryEntry
+#    reads mapped_faults, requires_fields and impact_limits. The YAML there is a seed for a
+#    database table rather than something loaded directly, so the drift never raised, but it
+#    means the file does not say what the code does. This file uses the runtime names.
+#
+# 2. Every action names the entitlement it depends on. grounding_svc filters the registry
+#    against the customer's actual entitlement rows before the model ever sees the list, so
+#    a basic tier customer is never offered a same day engineer their contract excludes.
+#    An action with no requires_entitlement is available to everyone.
+
+actions:
+
+  # ---- carried over from v1, with the runtime field names -----------------------------
+
+  - action_id: restart_router
+    department: network_operations
+    description: Send a remote restart command to the customer's router.
+    mapped_faults: [fault_power_supply, fault_firmware_crashloop]
+    requires_fields: [device_serial]
+    impact_limits: {}
+    requires_supervisor: false
+    idempotent: true
+
+  - action_id: run_line_diagnostic
+    department: network_operations
+    description: Trigger a remote line diagnostic on the customer's circuit.
+    mapped_faults: [fault_line_sync, fault_intermittent_connection, fault_no_dial_tone]
+    requires_fields: [circuit_id]
+    impact_limits: {}
+    requires_supervisor: false
+    idempotent: true
+
+  - action_id: schedule_technician_visit
+    department: field_service
+    description: Book a field engineer into a confirmed appointment slot.
+    mapped_faults: [fault_hardware, fault_cabling, fault_no_dial_tone, fault_power_supply]
+    requires_fields: [slot_id, circuit_id]
+    impact_limits: {}
+    requires_entitlement: SAME_DAY_ENGINEER
+    requires_supervisor: false
+    idempotent: false
+
+  - action_id: issue_billing_credit
+    department: billing
+    description: Apply a goodwill credit to the customer's account.
+    mapped_faults: [fault_billing_dispute]
+    requires_fields: [amount_lkr, reason_code]
+    impact_limits: {max_amount_lkr: 5000}
+    requires_entitlement: GOODWILL_CREDIT
+    requires_supervisor: true
+    idempotent: false
+
+  - action_id: resend_invoice
+    department: billing
+    description: Send the latest invoice and payment confirmation again.
+    mapped_faults: [fault_billing_dispute]
+    requires_fields: [invoice_no]
+    impact_limits: {}
+    requires_supervisor: false
+    idempotent: true
+
+  # ---- new operator actions -----------------------------------------------------------
+
+  - action_id: apply_outage_credit
+    department: network_operations
+    description: >
+      Apply the automatic service credit an open incident qualifies for. Only offered when
+      the incident carries a credit policy, so the amount is never invented.
+    mapped_faults: [fault_service_suspended, fault_cabling, fault_intermittent_connection]
+    requires_fields: [incident_id, amount_lkr]
+    impact_limits: {max_amount_lkr: 12000}
+    requires_entitlement: OUTAGE_CREDIT
+    requires_supervisor: false
+    idempotent: false
+
+  - action_id: waive_late_fee
+    department: billing
+    description: Remove a late payment fee from the account ledger.
+    mapped_faults: [fault_billing_dispute, fault_service_suspended]
+    requires_fields: [amount_lkr]
+    impact_limits: {max_amount_lkr: 2500}
+    requires_entitlement: LATE_FEE_WAIVER
+    requires_supervisor: false
+    idempotent: false
+
+  - action_id: reprovision_circuit
+    department: network_operations
+    description: Re-push the service profile to the circuit, clearing a stale provisioning state.
+    mapped_faults: [fault_line_sync, fault_no_dial_tone, fault_service_suspended]
+    requires_fields: [circuit_id]
+    impact_limits: {}
+    requires_supervisor: false
+    idempotent: true
+
+  - action_id: push_cpe_firmware
+    department: technical_support
+    description: Push the current firmware release to the customer's equipment.
+    mapped_faults: [fault_firmware_crashloop, fault_intermittent_connection]
+    requires_fields: [device_serial, target_firmware]
+    impact_limits: {}
+    requires_supervisor: false
+    idempotent: true
+
+  - action_id: swap_cpe
+    department: field_service
+    description: Raise a replacement for the customer's router or ONT.
+    mapped_faults: [fault_hardware, fault_power_supply, fault_firmware_crashloop]
+    requires_fields: [device_serial, replacement_model]
+    impact_limits: {}
+    requires_entitlement: FREE_CPE_SWAP
+    requires_supervisor: false
+    idempotent: false
+
+  - action_id: change_plan
+    department: sales
+    description: Move the subscription to a different catalogue plan from the next cycle.
+    mapped_faults: []
+    requires_fields: [subscription_id, target_plan_code]
+    impact_limits: {}
+    requires_entitlement: PLAN_CHANGE_ANYTIME
+    requires_supervisor: false
+    idempotent: false
+
+  - action_id: pause_contract
+    department: retention
+    description: Suspend billing and service for an agreed period without ending the contract.
+    mapped_faults: []
+    requires_fields: [subscription_id, months]
+    impact_limits: {max_months: 3}
+    requires_entitlement: CONTRACT_PAUSE
+    requires_supervisor: true
+    idempotent: false
+
+  - action_id: escalate_to_noc
+    department: network_operations
+    description: >
+      Raise the ticket to the network operations centre. Used when the measurements point
+      at shared equipment rather than the premises, so no engineer visit would help.
+    mapped_faults: [fault_intermittent_connection, fault_cabling, fault_no_dial_tone]
+    requires_fields: [circuit_id]
+    impact_limits: {}
+    requires_supervisor: false
+    idempotent: true

@@ -1,0 +1,35 @@
+# Rule-based simulation of the Lanka Link network and its customers.
+# Read by business-sim. Sim time drives everything; see business/app/sim.py.
+
+tick_seconds: 5              # wall seconds between ticks
+telemetry_minutes: 5         # line sample interval
+usage_minutes: 15            # usage sample interval
+
+# Share of peak load by Colombo hour (index 0 = midnight). Peaks 20:00 to 23:00.
+diurnal: [0.20, 0.15, 0.12, 0.10, 0.10, 0.15, 0.25, 0.40, 0.45, 0.45, 0.45, 0.45,
+          0.45, 0.45, 0.45, 0.45, 0.50, 0.75, 0.80, 0.85, 1.00, 1.00, 1.00, 0.70]
+weekend_factor: 1.2
+congestion_threshold_pct: 85  # at or above, evening sync halves and latency rises
+
+usage_gb_per_day: { light: 3, median: 8, heavy: 20 }
+# Capped plans scale the profile against the allowance instead.
+capped_share_of_allowance: { light: 0.5, median: 0.8, heavy: 1.1 }
+
+billing:
+  vat: 0.18
+  due_days: 14
+  late_fee_lkr: 250
+
+dunning_days: { reminder: 1, final_notice: 7, suspend: 14 }
+
+# Simulated customers only. Real sign-ups pay through the UI.
+payment_days: { autopay: 0, on_time: [-5, -1], late: [3, 20] }
+
+# Expected events per sim day across the simulated population, and their duration.
+faults:
+  drop_cpe: { per_day: 3, hours: [1, 6] }
+  firmware_crashloop: { per_day: 1, hours: [2, 12] }
+  line_degradation: { per_day: 2, hours: [4, 24] }
+  open_outage: { per_day: 0.3, hours: [2, 8] }
+  congest_uplink: { per_day: 1, hours: [2, 6] }
+  planned_work: { per_day: 0.2, hours: [24, 48] }
