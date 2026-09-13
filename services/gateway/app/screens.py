@@ -9,7 +9,8 @@ from typing import Any
 
 OVERVIEW_TOOLS = ["get_subscriber_profile", "get_payment_status", "get_circuit_status",
                   "get_active_outages_for", "get_plan_and_entitlements", "get_usage_summary"]
-BILLING_TOOLS = ["get_payment_status", "get_account_balance", "get_billing_history", "get_last_invoice_breakdown"]
+BILLING_TOOLS = ["get_payment_status", "get_account_balance", "get_billing_history", "get_last_invoice_breakdown",
+                 "get_ledger_window"]
 USAGE_TOOLS = ["get_usage_summary", "get_line_quality", "get_circuit_status"]
 
 
@@ -75,6 +76,55 @@ def plan_summary(plan: dict[str, Any], usage: dict[str, Any]) -> dict[str, Any]:
             "allowance_display": usage.get("allowance_display"), "used_fraction": used_fraction,
             "unlimited": bool(usage.get("is_uncapped")), "days_left": usage.get("days_left_in_cycle"),
             "renews_display": plan.get("renewal_date_display"), "upgrade_options": plan.get("upgrade_options", [])}
+
+
+NOTICE_TOOLS = ["get_active_outages_for", "get_planned_work_for", "get_payment_status", "get_usage_summary",
+                "get_circuit_status", "get_line_quality"]
+
+
+def notices(r: dict[str, Any]) -> list[dict[str, Any]]:
+    """Issues on our side that fit a template, most disruptive first.
+
+    Every field is a display string the customer can read as is. Titles are ours, never the
+    incident or work order title, which can carry equipment references.
+    """
+    out: list[dict[str, Any]] = []
+    outages = r.get("get_active_outages_for") or {}
+    for inc in (outages.get("incidents") or [])[:1]:
+        out.append({"kind": "outage", "title": "Repair work in your area",
+                    "detail": inc.get("customer_message") or "Engineers are working on it now.",
+                    "eta": inc.get("eta_display"), "since": inc.get("opened_display"),
+                    "credit": bool(inc.get("credit_policy"))})
+    pay = r.get("get_payment_status") or {}
+    if pay.get("suspended_for_nonpayment"):
+        out.append({"kind": "payment", "title": "Your service is paused",
+                    "detail": "Paying the balance brings it back within a few minutes.",
+                    "amount": pay.get("outstanding_balance_display"), "due": pay.get("oldest_due_date_display"),
+                    "action": {"label": "Pay now", "href": "/app/billing"}, "blocking": True})
+    elif pay.get("is_overdue"):
+        out.append({"kind": "payment", "title": "A payment is overdue",
+                    "detail": "Pay before the grace period ends to keep your service running.",
+                    "amount": pay.get("outstanding_balance_display"), "due": pay.get("oldest_due_date_display"),
+                    "action": {"label": "Pay now", "href": "/app/billing"}, "blocking": False})
+    work = r.get("get_planned_work_for") or {}
+    for w in (work.get("planned_work") or [])[:1]:
+        out.append({"kind": "maintenance",
+                    "title": "Maintenance running now" if work.get("work_in_progress_now") else "Planned maintenance",
+                    "detail": w.get("expected_impact") or "Your service may drop briefly during the window.",
+                    "window": w.get("window_display"), "in_progress": bool(work.get("work_in_progress_now"))})
+    circuit, quality = r.get("get_circuit_status") or {}, r.get("get_line_quality") or {}
+    if circuit.get("uplink_congested") or quality.get("evening_congestion"):
+        out.append({"kind": "congestion", "title": "Your area is busy at peak times",
+                    "detail": "Your line itself is healthy. Speeds can dip in the evenings while we add capacity.",
+                    "peak": "7 pm to 11 pm"})
+    usage = r.get("get_usage_summary") or {}
+    if usage.get("over_fup"):
+        out.append({"kind": "allowance", "title": "You have used this month's allowance",
+                    "detail": "Your speed is reduced until the cycle renews, or you can move to a bigger plan.",
+                    "used": usage.get("used_percent_display"), "allowance": usage.get("allowance_display"),
+                    "renews": usage.get("cycle_ends_display"), "shaped_speed": usage.get("shaped_speed_display"),
+                    "action": {"label": "See plans", "href": "/app/plan"}})
+    return out
 
 
 def health_sentence(quality: dict[str, Any]) -> str:

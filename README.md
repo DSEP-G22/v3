@@ -1,23 +1,23 @@
 # Lanka Link v3
 
 One endpoint (`http://localhost:8080`), every service in its own image, one `docker compose up`.
-Build plan: [PLAN.md](PLAN.md).
+Build plan: [PLAN.md](PLAN.md). Full feature guide: **http://localhost:8080/docs**.
 
 | Path | Who | What |
 |---|---|---|
-| `/` `/plans` | anyone | Landing and plan catalogue |
-| `/app` | customers | Home, billing, usage, plan, settings, support chat (text, photo, voice) |
-| `/console` | agent, lead, admin | Case inbox, drafts, approve or send back (Ctrl K finds a case) |
-| `/admin` | admin | Auto reply policy, model bindings (hot swap), grounding plan, traces, users |
-| `/sim` | operator, admin | Sim clock, network, scenarios and faults, customers, test lab, event log |
+| `/` `/plans` `/docs` | anyone | Landing, plan catalogue, how it all works |
+| `/app` | customers | Home, **tickets** (photo and voice attachments, live progress, notices, feedback), billing, usage, plan, settings |
+| `/console` | agent, lead, admin | Queue with both priorities, drafts, approve or send back (Ctrl K finds a case) |
+| `/admin` | admin | Overview with customer feedback, auto reply, model bindings (hot swap), grounding plan, traces, users |
+| `/sim` | operator, admin | Sim clock, live network topology, incidents (network and customer), customers, test lab, event log |
 
 ## Run
 
 ```bash
-cp .env.example .env        # fill NEON_KEY and BETTER_AUTH_SECRET (openssl rand -base64 32)
-scripts/up.sh               # or scripts\up.ps1
-scripts/smoke.sh            # or scripts\smoke.ps1
-uv run python scripts/neon-latency.py
+cp .env.example .env        # NEON_KEY, BETTER_AUTH_SECRET (openssl rand -base64 32), optional keys
+scripts/up.sh               # or scripts\up.ps1: the full stack
+# On a laptop without much RAM: everything except translation, speech and photo analysis
+docker compose -f compose.yaml -f compose.lite.yaml up -d --wait
 ```
 
 Seeded logins (passwords from `SEED_*_PASSWORD` in `.env`):
@@ -25,8 +25,22 @@ Seeded logins (passwords from `SEED_*_PASSWORD` in `.env`):
 - Customers: `amara`, `ravi`, `nadia`, `dinesh`, `priya`, `kavindu`, `thilini`, `rizwan` `@customers.lankalink.example.lk`
 
 Profiles:
-- GPU: `docker compose -f compose.yaml -f compose.gpu.yaml up -d` (local Ollama, CUDA whisper and NLLB).
-- CI: `docker compose -f compose.yaml -f compose.ci.yaml up -d --wait` (no model images, stub LLM).
+- **Lite**: `-f compose.lite.yaml`, no media models, replies in English.
+- **GPU**: `-f compose.gpu.yaml`, local Ollama, CUDA whisper and NLLB.
+- **CI**: `-f compose.ci.yaml`, no model images and the offline stub LLM.
+- **MLOps**: `--profile mlops`, MLflow on :5000 and Airflow on :8081 (see [ml/README.md](ml/README.md)).
+
+## How a reply is decided
+
+- **Two priorities per case.** Customer side: the distilled TriageModel (MiniLM plus 18 signals,
+  numpy weights in `services/triage/models`). Our side: rules over the account and network record
+  (`services/grounding/app/priority.py`). The queue sorts by the higher one.
+- **Customer side first.** The draft opens with what the customer reported on their own equipment
+  (steps only from device guidance and procedures), then anything on our side.
+- **LLM.** Bindings are set live in `/admin/models`. The default is Ollama `gpt-oss:120b-cloud` via the
+  host daemon (`OLLAMA_BASE_URL`), with the offline stub for CI.
+- **Tracing.** `LANGSMITH_TRACING=true` plus `LANGSMITH_API_KEY`: one trace per case revision, every stage
+  nested, and the draft as an LLM run with its exact prompt.
 
 ## Verify
 
@@ -46,5 +60,6 @@ private: make them public in the package settings, or `docker login ghcr.io` bef
 
 ## Security
 
-`.env` holds a live Neon password and is gitignored; gitleaks runs in CI and in `repo-init.sh`.
-Rotate the Neon password if it was ever shared. Payments are a stub: no card data is collected.
+`.env` holds a live Neon password and is gitignored, and so kept out of every image build
+(`.dockerignore`); gitleaks runs in CI and in `repo-init.sh`. Rotate the Neon password if it was ever
+shared. Payments are a stub: no card data is collected.

@@ -7,7 +7,9 @@ import { toast } from "sonner";
 
 import { SentAttachment, type Att } from "@/components/authed-media";
 import { KeyValues } from "@/components/kv";
+import { PriorityPair, type SidePriority } from "@/components/priority-pair";
 import { StatusDot } from "@/components/status-dot";
+import { UnifiedTicket, type Bundle, type Stages } from "@/components/unified-ticket";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -20,7 +22,7 @@ import { department, priority, STATE_WORD } from "@/lib/format";
 
 type Msg = { id: string; author_kind: string; body: string; body_en?: string | null; lang?: string | null;
   created_at: string; attachments: Att[] };
-type Finding = { signal: string; severity: string; headline: string; detail: string };
+type Finding = { signal: string; severity: string; headline: string; detail: string; side?: "customer" | "provider" };
 type Draft = { revision: number; text_en: string; text_out: string | null; language: string; status: string;
   reasons: string[]; findings: { rule: string; message: string; severity: string }[];
   action: { action_id: string; description: string; parameters: Record<string, unknown> } | null };
@@ -32,8 +34,17 @@ type CaseDetail = {
   conversation: { messages: Msg[] } | null;
   drafts: Draft[];
   grounding: { headline: string; findings: Finding[]; priority: { reasons: { detail: string; move: number }[] };
+    customer_priority: SidePriority; provider_priority: SidePriority;
     sla_display: string; completeness: Record<string, unknown> } | null;
+  payload: { stages: Stages } | null;
+  bundle: Bundle | null;
 };
+
+const LANGS = [
+  { value: "si", label: "Sinhala" }, { value: "si-Latn", label: "Singlish" },
+  { value: "ta", label: "Tamil" }, { value: "ta-Latn", label: "Tanglish" },
+];
+const LANG_WORD: Record<string, string> = { en: "English", si: "Sinhala", ta: "Tamil", "si-Latn": "Singlish", "ta-Latn": "Tanglish" };
 
 const SEND_BACK = ["Facts are wrong", "Tone needs work", "Wrong action", "Needs a person to call"];
 const SEVERITY_TONE = { cause: "bad", risk: "warn", context: "idle" } as const;
@@ -46,6 +57,8 @@ export default function CasePage() {
   const [live, setLive] = useState("");
   const [reason, setReason] = useState(SEND_BACK[0]);
   const [preview, setPreview] = useState<string | null>(null);
+  const [previewLang, setPreviewLang] = useState<string | null>(null);
+  const [translating, setTranslating] = useState(false);
   const [busy, setBusy] = useState(false);
   const held = data?.drafts.find((d) => d.status === "held");
 
@@ -89,6 +102,7 @@ export default function CasePage() {
         <div className="flex items-center gap-2">
           <Badge variant="secondary">{department(c.department)}</Badge>
           <Badge variant="outline">Priority {priority(c.priority_level, c.band)}</Badge>
+          <PriorityPair customer={data.grounding?.customer_priority ?? null} provider={data.grounding?.provider_priority ?? null} />
           <StatusDot tone={c.state === "AWAITING_APPROVAL" ? "warn" : "info"} label={STATE_WORD[c.state] ?? c.state} />
         </div>
       </div>
@@ -132,6 +146,9 @@ export default function CasePage() {
                 <ul className="space-y-2">
                   {data.grounding.findings.slice(0, 3).map((f) => (
                     <li key={f.signal}>
+                      <span className="mr-2 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                        {f.side === "customer" ? "Their side" : "Our side"}
+                      </span>
                       <StatusDot tone={SEVERITY_TONE[f.severity as keyof typeof SEVERITY_TONE] ?? "idle"} label={f.headline} />
                       <p className="ml-4 text-sm text-muted-foreground">{f.detail}</p>
                     </li>
@@ -143,7 +160,17 @@ export default function CasePage() {
 
           <Card>
             <CardHeader>
-              <CardDescription>Suggested reply {held?.language && held.language !== "en" && `(sent in ${held.language === "si" ? "Sinhala" : "Tamil"})`}</CardDescription>
+              <CardDescription>Unified ticket</CardDescription>
+              <CardTitle className="text-base">What the pipeline understood</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <UnifiedTicket bundle={data.bundle} stages={data.payload?.stages ?? null} />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardDescription>Suggested reply {held?.language && held.language !== "en" && `(sent in ${LANG_WORD[held.language] ?? held.language})`}</CardDescription>
               {held?.reasons?.length ? <CardTitle className="text-sm font-normal text-muted-foreground">{held.reasons[0]}</CardTitle> : null}
             </CardHeader>
             <CardContent className="space-y-3">
@@ -152,15 +179,38 @@ export default function CasePage() {
               ) : (
                 <p className="min-h-24 whitespace-pre-line text-sm text-muted-foreground">{live || "Drafting a reply."}</p>
               )}
-              {held?.language && held.language !== "en" && (
-                <div>
-                  <Button variant="ghost" size="sm" onClick={async () => {
-                    const r = await api<{ text: string }>(`/console/cases/${id}/preview?lang=${held.language}`);
-                    setPreview(r.text);
-                  }}>
-                    Preview translation
-                  </Button>
-                  {preview && <p className="mt-2 rounded-md bg-muted/60 p-3 text-sm whitespace-pre-line">{preview}</p>}
+              {held && (
+                <div className="space-y-2">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-xs text-muted-foreground">Translate:</span>
+                    {[...(held.language !== "en" && !LANGS.some((l) => l.value === held.language) ? [] : []),
+                      ...LANGS].map((l) => (
+                      <Button key={l.value} size="xs" variant={previewLang === l.value ? "secondary" : "ghost"} disabled={translating}
+                              onClick={async () => {
+                                setTranslating(true);
+                                setPreviewLang(l.value);
+                                try {
+                                  const r = await api<{ text: string }>(`/console/cases/${id}/preview?lang=${l.value}`);
+                                  setPreview(r.text);
+                                } catch (e) {
+                                  toast.error((e as Error).message);
+                                } finally {
+                                  setTranslating(false);
+                                }
+                              }}>
+                        {l.label}{l.value === held.language ? " (customer)" : ""}
+                      </Button>
+                    ))}
+                  </div>
+                  {translating && <p className="text-xs text-muted-foreground">Translating</p>}
+                  {preview && !translating && (
+                    <p className="rounded-md bg-muted/60 p-3 text-sm whitespace-pre-line">{preview}</p>
+                  )}
+                  {held.language !== "en" && (
+                    <p className="text-xs text-muted-foreground">
+                      On approval the customer receives this in {LANG_WORD[held.language] ?? held.language}.
+                    </p>
+                  )}
                 </div>
               )}
               {held?.action && (
@@ -209,11 +259,17 @@ export default function CasePage() {
                 {data.grounding && (
                   <section>
                     <h3 className="mb-1 text-sm font-medium">Why this priority</h3>
-                    <ul className="space-y-1 text-sm text-muted-foreground">
-                      {data.grounding.priority.reasons.map((r, i) => (
-                        <li key={i}>{r.detail} {r.move ? `(${r.move > 0 ? "+" : ""}${r.move})` : ""}</li>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {([["Customer side, triage model", data.grounding.customer_priority],
+                         ["Our side, rules on the record", data.grounding.provider_priority]] as const).map(([label, p]) => (
+                        <div key={label} className="rounded-lg border p-3">
+                          <p className="text-xs font-medium">{label}{p ? `: ${p.level} ${p.band}` : ""}</p>
+                          <ul className="mt-1 space-y-1 text-sm text-muted-foreground">
+                            {(p?.reasons ?? []).map((r, i) => <li key={i}>{r.detail}</li>)}
+                          </ul>
+                        </div>
                       ))}
-                    </ul>
+                    </div>
                     <p className="mt-2 text-sm">Service level: {data.grounding.sla_display}</p>
                     <div className="mt-2"><KeyValues data={data.grounding.completeness} /></div>
                   </section>

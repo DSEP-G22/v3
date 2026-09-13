@@ -74,6 +74,16 @@ export function useApi<T>(path: string | null) {
   return { data, error, loading, reload };
 }
 
+/** Re-run fn every ms while the tab is visible (live boards). */
+export function usePoll(fn: () => void, ms: number) {
+  useEffect(() => {
+    const t = setInterval(() => {
+      if (!document.hidden) fn();
+    }, ms);
+    return () => clearInterval(t);
+  }, [fn, ms]);
+}
+
 /** Per-user server events (account changes, replies, stage chips). Reconnects on its own. */
 export function useEvents(onEvent: (kind: string, data: unknown) => void) {
   useStream("/stream", onEvent);

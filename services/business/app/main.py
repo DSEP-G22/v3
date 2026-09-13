@@ -288,6 +288,22 @@ async def invoice_intent(invoice_id: str, body: InvoiceIntent) -> dict[str, Any]
     return {"intent_id": r.json()["id"], "amount_display": fmt.money(row["due"])}
 
 
+@app.post("/accounts/balance/intent", status_code=201)
+async def balance_intent(body: InvoiceIntent) -> dict[str, Any]:
+    """Pay everything owed in one go: what a paused customer needs to get their service back."""
+    row = await db.neon.fetchrow(
+        """SELECT a.id, a.outstanding_balance AS due FROM org.billing_account a
+           JOIN org.customer_link l ON l.subscriber_id = a.subscriber_id WHERE l.user_id = $1""", body.user_id)
+    if row is None or row["due"] <= 0.005:
+        raise HTTPException(404, "Nothing is owed on your account.")
+    r = await http.post(f"{PAYMENTS_URL}/intents", json={
+        "user_id": body.user_id, "purpose": "invoice", "ref": row["id"], "amount_lkr": f"{row['due']:.2f}",
+        "description": "Account balance", "idempotency_key": f"bal-{row['id']}-{secrets.token_hex(6)}",
+    })
+    r.raise_for_status()
+    return {"intent_id": r.json()["id"], "amount_display": fmt.money(row["due"])}
+
+
 # -- staff: names for the queue, approved actions --------------------------------------------------
 
 

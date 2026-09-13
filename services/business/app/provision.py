@@ -175,10 +175,57 @@ async def on_plan_change(conn: asyncpg.Connection, intent: dict[str, Any], world
     return sub_id
 
 
+async def _restore_if_settled(conn: asyncpg.Connection, account_id: str, now: datetime) -> None:
+    """A paid up account comes back at once, not on the next sim tick (a paused clock would never tick).
+    ponytail: this path skips the late fee the tick-driven restore charges; add it here if billing needs it."""
+    row = await conn.fetchrow("SELECT subscriber_id, status, outstanding_balance FROM org.billing_account WHERE id = $1",
+                              account_id)
+    if row and row["outstanding_balance"] <= 0.005 and row["status"] in ("overdue", "suspended"):
+        from app import scenarios  # late: scenarios is the owner of restore()
+
+        await scenarios.restore(conn, account_id, row["subscriber_id"], now)
+        await conn.execute("DELETE FROM org.active_fault WHERE kind = 'suspend_account' AND target_ref = $1",
+                           row["subscriber_id"])
+
+
+async def on_balance_payment(conn: asyncpg.Connection, intent: dict[str, Any], now: datetime) -> str | None:
+    """Pay the whole balance: settle open invoices oldest first, then restore if paid up."""
+    acct = await conn.fetchrow("SELECT * FROM org.billing_account WHERE id = $1 FOR UPDATE", intent["ref"])
+    if acct is None:
+        return None
+    amount = remaining = float(intent["amount_lkr"])
+    first_invoice = None
+    for inv in await conn.fetch(
+        """SELECT id, total_lkr, paid_lkr FROM org.invoice WHERE account_id = $1
+           AND status IN ('unpaid', 'overdue', 'partial') ORDER BY due_on, id FOR UPDATE""", acct["id"]):
+        if remaining <= 0.005:
+            break
+        take = min(remaining, round(inv["total_lkr"] - inv["paid_lkr"], 2))
+        paid = round(inv["paid_lkr"] + take, 2)
+        await conn.execute("UPDATE org.invoice SET paid_lkr = $2, status = $3 WHERE id = $1",
+                           inv["id"], paid, "paid" if paid >= inv["total_lkr"] - 0.005 else "partial")
+        first_invoice = first_invoice or inv["id"]
+        remaining = round(remaining - take, 2)
+    balance = round(acct["outstanding_balance"] - amount, 2)
+    await conn.execute("UPDATE org.billing_account SET outstanding_balance = $2 WHERE id = $1", acct["id"], balance)
+    pay_id = _rid("PAY")
+    await write_org(conn, [
+        Payment(id=pay_id, account_id=acct["id"], invoice_id=first_invoice, amount_lkr=amount,
+                method="card" if intent.get("method") == "card_4242" else "mobile_wallet",
+                reference=intent["id"], posted_at=now, status="settled"),
+        LedgerEntry(id=_rid("LED"), account_id=acct["id"], posted_at=now, description=f"Balance payment, {pay_id}",
+                    kind="payment", debit_lkr=0.0, credit_lkr=amount, balance_after_lkr=balance, reference=pay_id),
+    ])
+    await _restore_if_settled(conn, acct["id"], now)
+    return acct["subscriber_id"]
+
+
 async def on_invoice_payment(conn: asyncpg.Connection, intent: dict[str, Any], now: datetime) -> str | None:
-    """Post a payment against an invoice. A suspension lifts on the next sim tick."""
+    """Post a payment against an invoice, or against the whole balance when ref is an account."""
     if await conn.fetchval("SELECT 1 FROM org.payment WHERE reference = $1", intent["id"]):
         return None
+    if str(intent["ref"]).startswith("ACC"):
+        return await on_balance_payment(conn, intent, now)
     inv = await conn.fetchrow("SELECT * FROM org.invoice WHERE id = $1 FOR UPDATE", intent["ref"])
     if inv is None:
         return None
@@ -197,4 +244,5 @@ async def on_invoice_payment(conn: asyncpg.Connection, intent: dict[str, Any], n
         LedgerEntry(id=_rid("LED"), account_id=acct["id"], posted_at=now, description=f"Payment received, {pay_id}",
                     kind="payment", debit_lkr=0.0, credit_lkr=amount, balance_after_lkr=balance, reference=pay_id),
     ])
+    await _restore_if_settled(conn, acct["id"], now)
     return acct["subscriber_id"]

@@ -21,6 +21,7 @@ services:
       response: { condition: service_healthy }
 
   control:
-    environment: { LANKA_LLM_IMPL: stub }
+    # Seeded once; later changes go through /admin/models. LANKA_LLM_IMPL=ollama for real drafts.
+    environment: { LANKA_LLM_IMPL: "${LANKA_LLM_IMPL:-stub}" }
   response:
     environment: { TRANSLATE_URL: "" }

@@ -23,7 +23,7 @@ import redis.asyncio as redis
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from minio import Minio
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app import text as rules
 from lanka_common import bus
@@ -43,7 +43,22 @@ CREATE TABLE IF NOT EXISTS inquiry.conversation (
     created_at    timestamptz NOT NULL DEFAULT now(),
     updated_at    timestamptz NOT NULL DEFAULT now()
 );
-CREATE UNIQUE INDEX IF NOT EXISTS ux_conversation_customer ON inquiry.conversation (user_id) WHERE origin = 'customer';
+-- Tickets: every customer conversation is one ticket, so a customer has many.
+DROP INDEX IF EXISTS inquiry.ux_conversation_customer;
+ALTER TABLE inquiry.conversation ADD COLUMN IF NOT EXISTS subject text;
+ALTER TABLE inquiry.conversation ADD COLUMN IF NOT EXISTS category text;
+ALTER TABLE inquiry.conversation ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'open';
+ALTER TABLE inquiry.conversation ADD COLUMN IF NOT EXISTS closed_at timestamptz;
+ALTER TABLE inquiry.conversation ADD COLUMN IF NOT EXISTS rating smallint;
+ALTER TABLE inquiry.conversation ADD COLUMN IF NOT EXISTS feedback text;
+ALTER TABLE inquiry.conversation ADD COLUMN IF NOT EXISTS feedback_at timestamptz;
+CREATE INDEX IF NOT EXISTS ix_conversation_user ON inquiry.conversation (user_id, updated_at DESC);
+-- Conversations from before tickets get a subject from their first message.
+UPDATE inquiry.conversation c SET subject = coalesce(
+    (SELECT left(split_part(m.body, E'\n', 1), 80) FROM inquiry.message m
+     WHERE m.conversation_id = c.id AND m.author_kind = 'customer' AND m.body <> '' ORDER BY m.created_at LIMIT 1),
+    'Earlier conversation')
+WHERE c.subject IS NULL;
 CREATE TABLE IF NOT EXISTS inquiry.message (
     id              text PRIMARY KEY,
     conversation_id text NOT NULL REFERENCES inquiry.conversation (id),
@@ -121,7 +136,8 @@ async def _on_case_event(msg) -> None:
                               e["message_id"], e["case_id"], e["revision"])
     elif e["kind"] == "closed":
         await rt.pool.execute(
-            "UPDATE inquiry.conversation SET open_case_id = NULL WHERE id = $1 AND open_case_id = $2",
+            """UPDATE inquiry.conversation SET open_case_id = NULL, status = 'closed', closed_at = now(), updated_at = now()
+               WHERE id = $1 AND open_case_id = $2""",
             e["conversation_id"], e["case_id"],
         )
     elif e["kind"] == "released":
@@ -133,7 +149,11 @@ async def _on_case_event(msg) -> None:
             e.get("language", "en"), e["case_id"], e["revision"],
         )
         if row:
+            await rt.pool.execute(
+                "UPDATE inquiry.conversation SET status = 'answered', updated_at = now() WHERE id = $1",
+                e["conversation_id"])
             await _push(e["user_id"], "message", {"message": {**_row(row), "attachments": []}})
+            await _push(e["user_id"], "ticket", {"id": e["conversation_id"], "status": "answered"})
     await msg.ack()
 
 
@@ -162,21 +182,24 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-async def _conversation(user_id: str, subscriber_id: str | None, origin: str) -> asyncpg.Record:
-    if origin == "customer":
+async def _conversation(user_id: str, subscriber_id: str | None, origin: str, conversation_id: str | None = None,
+                        subject: str | None = None, category: str | None = None) -> asyncpg.Record:
+    """The ticket a message belongs to. A reply on a closed ticket reopens it; no id opens a new one.
+    Test inquiries always get their own conversation, invisible to customers."""
+    if origin == "customer" and conversation_id:
         row = await rt.pool.fetchrow(
-            """INSERT INTO inquiry.conversation (id, user_id, subscriber_id, origin) VALUES ($1, $2, $3, 'customer')
-               ON CONFLICT (user_id) WHERE origin = 'customer'
-               DO UPDATE SET subscriber_id = coalesce(EXCLUDED.subscriber_id, inquiry.conversation.subscriber_id)
-               RETURNING *""",
-            _id("conv"), user_id, subscriber_id,
+            """UPDATE inquiry.conversation SET status = 'open', closed_at = NULL, updated_at = now()
+               WHERE id = $1 AND user_id = $2 AND origin = 'customer' RETURNING *""",
+            conversation_id, user_id,
         )
-    else:  # each test inquiry gets its own conversation, invisible to customers
-        row = await rt.pool.fetchrow(
-            "INSERT INTO inquiry.conversation (id, user_id, subscriber_id, origin) VALUES ($1, $2, $3, 'sim_test') RETURNING *",
-            _id("conv"), user_id, subscriber_id,
-        )
-    return row
+        if row is None:
+            raise HTTPException(404, "We could not find that ticket.")
+        return row
+    return await rt.pool.fetchrow(
+        """INSERT INTO inquiry.conversation (id, user_id, subscriber_id, origin, subject, category)
+           VALUES ($1, $2, $3, $4, $5, $6) RETURNING *""",
+        _id("conv"), user_id, subscriber_id, origin, subject, category,
+    )
 
 
 @app.post("/messages", status_code=201)
@@ -186,6 +209,9 @@ async def send(
     origin: Literal["customer", "sim_test"] = Form("customer"),
     text: str = Form(""),
     language: str | None = Form(None),
+    conversation_id: str | None = Form(None),
+    subject: str | None = Form(None),
+    category: str | None = Form(None),
     files: list[UploadFile] = File(default_factory=list),
 ) -> dict[str, Any]:
     body = rules.normalise(text)
@@ -194,7 +220,9 @@ async def send(
         await rt.pool.execute("INSERT INTO inquiry.validation_log (user_id, code) VALUES ($1, $2)", user_id, rejection.code)
         raise HTTPException(422, rejection.message)
 
-    conv = await _conversation(user_id, subscriber_id, origin)
+    title = rules.normalise(subject or "").strip()[:120] or (body.split("\n", 1)[0][:80] if body else "Photo or voice note")
+    conv = await _conversation(user_id, subscriber_id, origin, conversation_id, title,
+                               category if category in TICKET_CATEGORIES else None)
     digest = hashlib.sha1(f"{body}|{len(blobs)}".encode()).hexdigest()
     if not await rt.cache.set(f"dup:{conv['id']}:{digest}", "1", nx=True, ex=DUPLICATE_WINDOW_S):
         raise HTTPException(409, "You just sent us this, and we are already on it.")
@@ -244,17 +272,92 @@ async def send(
         "received_at": now.isoformat(),
     }
     await rt.js.publish("inquiry.received", json.dumps(event).encode(), headers={"Nats-Msg-Id": msg_id})
-    return {"message": {**_row(msg), "attachments": [{"id": a["id"], "kind": a["kind"]} for a in attachments]}}
+    return {"message": {**_row(msg), "attachments": [{"id": a["id"], "kind": a["kind"]} for a in attachments]},
+            "ticket": {"id": conv["id"], "subject": conv["subject"], "status": conv["status"]}}
 
 
 @app.get("/conversations/mine")
 async def mine(user_id: str) -> dict[str, Any]:
+    """The customer's most recently active ticket (kept for the scripts and older clients)."""
     conv = await rt.pool.fetchrow(
-        "SELECT * FROM inquiry.conversation WHERE user_id = $1 AND origin = 'customer'", user_id
+        """SELECT * FROM inquiry.conversation WHERE user_id = $1 AND origin = 'customer'
+           ORDER BY updated_at DESC LIMIT 1""", user_id
     )
     if conv is None:
         return {"conversation": None, "messages": []}
     return {"conversation": _row(conv), "messages": await _messages(conv["id"])}
+
+
+# -- tickets ----------------------------------------------------------------------------------------
+
+TICKET_CATEGORIES = ("connection", "equipment", "billing", "plan", "other")
+
+
+@app.get("/tickets")
+async def tickets(user_id: str) -> dict[str, Any]:
+    rows = await rt.pool.fetch(
+        """SELECT c.id, c.subject, c.category, c.status, c.created_at, c.updated_at, c.closed_at, c.rating,
+                  c.open_case_id,
+                  (SELECT count(*) FROM inquiry.message m WHERE m.conversation_id = c.id) AS messages,
+                  (SELECT count(*) FROM inquiry.attachment a WHERE a.conversation_id = c.id) AS attachments,
+                  last.body AS last_body, last.author_kind AS last_author, last.created_at AS last_at
+           FROM inquiry.conversation c
+           LEFT JOIN LATERAL (SELECT body, author_kind, created_at FROM inquiry.message m
+                              WHERE m.conversation_id = c.id ORDER BY created_at DESC LIMIT 1) last ON true
+           WHERE c.user_id = $1 AND c.origin = 'customer'
+           ORDER BY c.updated_at DESC LIMIT 100""", user_id)
+    return {"tickets": [_row(r) for r in rows]}
+
+
+@app.get("/tickets/{ticket_id}")
+async def ticket(ticket_id: str, user_id: str) -> dict[str, Any]:
+    conv = await rt.pool.fetchrow(
+        "SELECT * FROM inquiry.conversation WHERE id = $1 AND user_id = $2 AND origin = 'customer'", ticket_id, user_id)
+    if conv is None:
+        raise HTTPException(404, "We could not find that ticket.")
+    return {"ticket": _row(conv), "messages": await _messages(ticket_id)}
+
+
+class FeedbackIn(BaseModel):
+    user_id: str
+    rating: int = Field(ge=1, le=5)
+    comment: str = Field(default="", max_length=1000)
+
+
+@app.post("/tickets/{ticket_id}/feedback")
+async def feedback(ticket_id: str, body: FeedbackIn) -> dict[str, Any]:
+    row = await rt.pool.fetchrow(
+        """UPDATE inquiry.conversation SET rating = $3, feedback = $4, feedback_at = now()
+           WHERE id = $1 AND user_id = $2 AND origin = 'customer' RETURNING id, rating, feedback, feedback_at""",
+        ticket_id, body.user_id, body.rating, rules.normalise(body.comment).strip() or None)
+    if row is None:
+        raise HTTPException(404, "We could not find that ticket.")
+    return _row(row)
+
+
+@app.post("/tickets/{ticket_id}/close")
+async def close_ticket(ticket_id: str, user_id: str) -> dict[str, Any]:
+    row = await rt.pool.fetchrow(
+        """UPDATE inquiry.conversation c SET status = 'closed', closed_at = now(), updated_at = now()
+           FROM (SELECT open_case_id FROM inquiry.conversation WHERE id = $1) prev
+           WHERE c.id = $1 AND c.user_id = $2 AND c.origin = 'customer'
+           RETURNING c.id, c.status, prev.open_case_id""", ticket_id, user_id)
+    if row is None:
+        raise HTTPException(404, "We could not find that ticket.")
+    return _row(row)
+
+
+@app.get("/feedback/summary")
+async def feedback_summary(days: int = 30) -> dict[str, Any]:
+    """Staff view: how customers rated their tickets."""
+    stats = await rt.pool.fetchrow(
+        """SELECT count(*) AS rated, avg(rating)::float AS average,
+                  count(*) FILTER (WHERE rating >= 4) AS happy, count(*) FILTER (WHERE rating <= 2) AS unhappy
+           FROM inquiry.conversation WHERE rating IS NOT NULL AND feedback_at > now() - make_interval(days => $1)""", days)
+    recent = await rt.pool.fetch(
+        """SELECT id, subject, rating, feedback, feedback_at FROM inquiry.conversation
+           WHERE rating IS NOT NULL ORDER BY feedback_at DESC LIMIT 12""")
+    return {**dict(stats), "recent": [_row(r) for r in recent]}
 
 
 @app.get("/cases/{case_id}/messages")

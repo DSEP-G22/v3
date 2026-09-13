@@ -22,12 +22,12 @@ from typing import Any
 
 import asyncpg
 import httpx
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
 
 from app import policy
 from app.render import render_prompt
-from lanka_common import bus
+from lanka_common import bus, tracing
 from lanka_common.contracts import ContextBundle
 from lanka_common.db import POOLER_KWARGS, parse_neon_key
 from lanka_common.llm import LLMUnavailable, Stub, build
@@ -142,12 +142,48 @@ async def generate_from_bundle(bundle: ContextBundle) -> AsyncIterator[str]:
 # -- the stage ------------------------------------------------------------------------------------
 
 
+#: Languages a reply can go out in: the customer's own, including romanised Sinhala and Tamil.
+REPLY_LANGS = ("en", "si", "ta", "si-Latn", "ta-Latn")
+LANG_NAME = {"si": "Sinhala, in Sinhala script", "ta": "Tamil, in Tamil script",
+             "si-Latn": "Sinhala written in everyday Latin letters (Singlish), the way the customer wrote",
+             "ta-Latn": "Tamil written in everyday Latin letters (Tanglish), the way the customer wrote"}
+
+
 async def _translate(text: str, lang: str) -> str:
-    if lang not in ("si", "ta") or not TRANSLATE_URL:  # empty URL: CI profile without the model services
+    """The reply in the customer's language: the translation service first, the drafting model
+    when that is not running or fails, and the English original only if both are unavailable."""
+    if lang not in REPLY_LANGS or lang == "en":
         return text
-    r = await http.post(f"{TRANSLATE_URL}/run_out", json={"text": text, "target": lang})
-    r.raise_for_status()
-    return r.json()["text"]
+    if TRANSLATE_URL and lang in ("si", "ta"):
+        with contextlib.suppress(httpx.HTTPError, KeyError):
+            r = await http.post(f"{TRANSLATE_URL}/run_out", json={"text": text, "target": lang})
+            r.raise_for_status()
+            return r.json()["text"]
+    if rt.llm.name == "stub":
+        return text
+    # One line at a time, in parallel: a model asked for a whole reply tends to stop after the
+    # first sentence. Step numbers and the sign off are kept as they are.
+    lines = text.split("\n")
+    return "\n".join(await asyncio.gather(*(_llm_line(line, lang) for line in lines)))
+
+
+_STEP = re.compile(r"^(\s*\d{1,2}\.\s+)(.*)$")
+
+
+async def _llm_line(line: str, lang: str) -> str:
+    m = _STEP.match(line)
+    prefix, body = (m.group(1), m.group(2)) if m else ("", line)
+    if not body.strip() or body.strip() == SIGN_OFF:
+        return line
+    latin = " Use plain ASCII letters only, with no accents or diacritics." if lang.endswith("-Latn") else ""
+    prompt = (f"Translate the text below into {LANG_NAME[lang]}.{latin}\n"
+              "Translate all of it. Keep every amount, date, time, name, reference and product word "
+              "(router, Wi-Fi, LAN, WAN, cable) exactly as written. Reply with the translation only.\n\n" + body)
+    try:
+        out = " ".join((await rt.llm.generate(prompt)).split())
+    except LLMUnavailable:
+        return line
+    return prefix + (normalise(out) or body)
 
 
 class RunIn(BaseModel):
@@ -161,13 +197,23 @@ class RunIn(BaseModel):
 
 
 @app.post("/run")
-async def run(body: RunIn) -> dict[str, Any]:
+async def run(body: RunIn, request: Request) -> dict[str, Any]:
+    """Nests under the orchestrator's trace for this case when LangSmith is on."""
+    with tracing.span("response", parent=tracing.parent_from(request.headers),
+                      inputs={"case_id": body.case_id, "revision": body.revision, "language": body.language},
+                      case_id=body.case_id) as span_run:
+        out = await _run(body)
+        tracing.finish(span_run, out)
+        return out
+
+
+async def _run(body: RunIn) -> dict[str, Any]:
     started = time.perf_counter()
     r = await http.get(f"{GROUNDING_URL}/bundles/{body.case_id}/{body.revision}")
     if r.status_code != 200:
         raise HTTPException(409, "No bundle to draft from.")
     bundle = ContextBundle.model_validate(r.json())
-    lang = bundle.reply_language if bundle.reply_language in ("en", "si", "ta") else "en"
+    lang = bundle.reply_language if bundle.reply_language in REPLY_LANGS else "en"
     action = (body.recommended_action or {}).get("action_id")
     rules = await _policy(bundle.department)
     await rt.pool.execute(
@@ -198,13 +244,16 @@ async def run(body: RunIn) -> dict[str, Any]:
         sent += 1
 
     try:
-        async for token in generate_from_bundle(bundle):
-            await rt.nc.publish(f"case.{body.case_id}.stream", token.encode())  # raw, console only
-            buffer += token
-            *done, buffer = _SENTENCE_END.split(buffer)
-            for sentence in done:
-                parts.append(sentence)
-                await emit(sentence)
+        with tracing.span("draft", run_type="llm", inputs={"prompt": render_prompt(bundle)},
+                          model=f"{rt.llm.name}:{rt.llm.model}", case_id=body.case_id) as llm_run:
+            async for token in generate_from_bundle(bundle):
+                await rt.nc.publish(f"case.{body.case_id}.stream", token.encode())  # raw, console only
+                buffer += token
+                *done, buffer = _SENTENCE_END.split(buffer)
+                for sentence in done:
+                    parts.append(sentence)
+                    await emit(sentence)
+            tracing.finish(llm_run, {"text": " ".join(parts) + buffer})
     except LLMUnavailable as exc:
         text = f"No reply was drafted because the language model could not be reached ({exc}). Reply by hand."
         return await _hold(body, bundle, text, None, lang, "unavailable", [], ["The model was unavailable."], started)
@@ -212,7 +261,8 @@ async def run(body: RunIn) -> dict[str, Any]:
         parts.append(buffer)
         await emit(buffer)
 
-    text_en = normalise(" ".join(p.strip() for p in parts)) + f"\n\n{SIGN_OFF}"
+    # Sentence splitting eats newlines; numbered repair steps go back on their own lines.
+    text_en = re.sub(r"\s+(?=\d{1,2}\.\s)", "\n", normalise(" ".join(p.strip() for p in parts))) + f"\n\n{SIGN_OFF}"
     findings = policy.check_draft(text_en, bundle) + (stopped or [])
     decision = policy.finalise(pre, rules, findings)
     model = f"{rt.llm.name}:{rt.llm.model}"
@@ -232,7 +282,7 @@ async def _store(body: RunIn, text_en: str, text_out: str | None, lang: str, mod
     await rt.pool.execute(
         """INSERT INTO response.draft (case_id, revision, text_en, text_out, language, model, findings, status,
                                        reasons, action, decided_by, decided_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, CASE WHEN $11 IS NULL THEN NULL ELSE now() END)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::text, CASE WHEN $11::text IS NULL THEN NULL ELSE now() END)
            ON CONFLICT (case_id, revision) DO UPDATE SET text_en = $3, text_out = $4, findings = $7, status = $8,
                reasons = $9, action = $10, decided_by = $11""",
         body.case_id, body.revision, text_en, text_out, lang, model, json.dumps(findings), status,

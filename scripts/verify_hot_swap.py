@@ -33,7 +33,7 @@ def main() -> int:
     swapped = swap(admin, "stub", "stub", {}, "verify_hot_swap")
     assert swapped["generation"] == before["generation"] + 1, swapped
     probe = admin.post(f"/api/admin/models/{ROLE}/probe").raise_for_status().json()
-    assert probe["status"] == "ok", probe
+    assert probe["status"] == "reachable", probe
     print(f"swapped: stub probes {probe['status']} in {probe['ms']} ms")
 
     restored = swap(admin, before["impl"], before["model_version"], before.get("params") or {}, "verify_hot_swap restore")

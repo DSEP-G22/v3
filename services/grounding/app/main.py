@@ -23,6 +23,7 @@ from app import findings
 from app.actions import load_registry, select
 from app.assemble import build, led_query
 from app.plan import PlanResolver, load_file
+from app.priority import queue as priority_queue
 from lanka_common import bus
 from lanka_common.contracts import (
     Diagnosis,
@@ -32,6 +33,7 @@ from lanka_common.contracts import (
     Transcript,
     Triage,
     VisualSummary,
+    band_for,
 )
 from lanka_common.db import POOLER_KWARGS, parse_neon_key
 
@@ -158,9 +160,12 @@ async def run(body: BuildIn) -> dict[str, Any]:
     rt.bundles[f"{body.case_id}:{body.revision}"] = doc  # hot copy for the response service
     asyncio.create_task(_persist(bundle, doc, unused, set(extra)))
     top = findings.summarise(bundle)
+    cp, pp = bundle.customer_priority, bundle.provider_priority
+    level = priority_queue(cp, pp) if cp and pp else bundle.priority.level
     return {
         "bundle_id": f"{body.case_id}:{body.revision}", "department": bundle.department,
-        "priority_level": bundle.priority.level, "band": bundle.priority.band,
+        "priority_level": level, "band": band_for(level),
+        "customer_priority": cp.model_dump() if cp else None, "provider_priority": pp.model_dump() if pp else None,
         "headline": findings.headline(bundle), "findings": top[:3],
         "sufficient": bundle.completeness.sufficient, "missing": bundle.completeness.missing,
         "recommended_action": select(bundle.permitted_actions, bundle.org_facts, body.case_id),
@@ -202,6 +207,8 @@ async def bundle_findings(case_id: str, revision: int) -> dict[str, Any]:
     return {"headline": findings.headline(bundle), "findings": findings.summarise(bundle),
             "recommended_action": select(bundle.permitted_actions, bundle.org_facts, case_id),
             "priority": bundle.priority.model_dump(), "sla_display": bundle.sla.display,
+            "customer_priority": bundle.customer_priority.model_dump() if bundle.customer_priority else None,
+            "provider_priority": bundle.provider_priority.model_dump() if bundle.provider_priority else None,
             "completeness": bundle.completeness.model_dump()}
 
 

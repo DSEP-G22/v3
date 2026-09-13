@@ -28,6 +28,13 @@ from pydantic import BaseModel
 from app.led import lit_colours
 
 INQUIRY_URL = os.environ.get("INQUIRY_URL", "http://inquiry:8000")
+#: Classifier labels in words the writer can repeat, so a power plug is never read as the WAN cable.
+PART = {
+    "power": "power socket", "power-cable": "power cable", "power-conn": "power connector (the round power plug)",
+    "fiber-cable": "fibre (internet) cable", "lan-cable": "network (LAN) cable", "lans": "LAN ports",
+    "lans-conn": "LAN cable connector", "phone": "phone socket", "phone-cable": "phone cable",
+    "phone-conn": "phone connector", "usb": "USB port", "usb-cable": "USB cable", "usb-conn": "USB connector",
+}
 MODEL_DIR = Path(os.environ.get("MODEL_DIR", "/models"))
 
 http = httpx.AsyncClient(timeout=10)
@@ -81,7 +88,7 @@ async def run(body: In) -> dict[str, Any]:
     classes, leds = await asyncio.gather(asyncio.to_thread(_classify, img), asyncio.to_thread(lit_colours, img))
     label, conf = classes[0]
     lit = [led["colour"] for led in leds]
-    summary = f"Photo of router equipment, most likely the {label.replace('_', ' ')}."
+    summary = f"The photo shows the router's {PART.get(label, label.replace('-', ' ').replace('_', ' '))}."
     summary += f" Lit indicators: {', '.join(lit)}." if lit else " No lit indicators are visible."
     return {"summary": summary, "confidence": round(conf, 4), "classes": [{"label": c, "p": round(p, 4)} for c, p in classes],
             "leds": leds, "model": "efficientnet-b0-router-onnx+hsv", "ms": int((time.perf_counter() - started) * 1000)}

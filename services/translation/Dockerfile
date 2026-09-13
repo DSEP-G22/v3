@@ -12,7 +12,7 @@ FROM python:3.12-slim
 COPY --from=ghcr.io/astral-sh/uv:0.7 /uv /bin/uv
 WORKDIR /srv
 COPY packages/common packages/common
-RUN uv pip install --system --no-cache ./packages/common "fastapi>=0.115" "uvicorn[standard]>=0.30" \
+RUN --mount=type=cache,target=/root/.cache/uv uv pip install --system ./packages/common "fastapi>=0.115" "uvicorn[standard]>=0.30" \
     "ctranslate2>=4.4" "transformers>=4.44" "sentencepiece>=0.2" "deep-translator>=1.11"
 COPY --from=convert /models /models
 ENV MODEL_DIR=/models OMP_NUM_THREADS=4 HF_HUB_OFFLINE=1

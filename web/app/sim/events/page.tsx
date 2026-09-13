@@ -2,12 +2,13 @@
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useApi } from "@/lib/api";
+import { useApi, usePoll } from "@/lib/api";
 
 type Event = { id: string; kind: string; target: string; note: string; actor: string; occurred_display: string };
 
 export default function Events() {
-  const { data, loading } = useApi<{ events: Event[] }>("/sim/events?limit=200");
+  const { data, loading, reload } = useApi<{ events: Event[] }>("/sim/events?limit=200");
+  usePoll(reload, 4000);
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-semibold tracking-tight">Event log</h1>

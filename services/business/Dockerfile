@@ -2,9 +2,9 @@ FROM python:3.12-slim
 COPY --from=ghcr.io/astral-sh/uv:0.7 /uv /bin/uv
 WORKDIR /srv
 COPY packages/common packages/common
-RUN uv pip install --system --no-cache ./packages/common \
+RUN --mount=type=cache,target=/root/.cache/uv uv pip install --system ./packages/common \
     "fastapi>=0.115" "uvicorn[standard]>=0.30" "sqlalchemy[asyncio]>=2.0" "asyncpg>=0.29" \
-    "pyyaml>=6" "nats-py>=2.9" "redis>=5"
+    "pyyaml>=6" "nats-py>=2.9" "redis>=5" "httpx>=0.27"
 COPY config config
 ENV LANKA_CONFIG_DIR=/srv/config
 COPY services/business/app app

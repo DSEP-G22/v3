@@ -1,6 +1,6 @@
 name: lanka-link-v3
 
-x-image: &img ghcr.io/${GHCR_OWNER:-local}/lanka-link-v3
+x-image: &img ghcr.io/${GHCR_OWNER:-dsep-g22}/lanka-link-v3
 
 services:
   edge:
@@ -53,23 +53,23 @@ services:
       retries: 30
     restart: unless-stopped
 
+  # S3-compatible object store. MinIO no longer publishes images, so this is RustFS; the service
+  # keeps the name `minio` so the MINIO_* settings and the minio client in inquiry work unchanged.
   minio:
-    image: minio/minio
-    command: ["server", "/data", "--console-address", ":9001"]
+    image: rustfs/rustfs:latest
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-lanka}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-lanka-minio-secret}
+      RUSTFS_ADDRESS: ":9000"
+      RUSTFS_VOLUMES: /data
+      RUSTFS_ACCESS_KEY: ${MINIO_ROOT_USER:-lanka}
+      RUSTFS_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-lanka-minio-secret}
+    # ponytail: root inside the container so any volume is writable; drop once rustfs ships a fixed uid story
+    user: "0:0"
     volumes:
-      - minio-data:/data
-    healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
+      - objects-data:/data
     restart: unless-stopped
 
   migrate:
-    image: ghcr.io/${GHCR_OWNER:-local}/lanka-link-v3-migrate:${V3_TAG:-latest}
+    image: ghcr.io/${GHCR_OWNER:-dsep-g22}/lanka-link-v3-migrate:${V3_TAG:-latest}
     build: { context: ., dockerfile: services/migrate/Dockerfile }
     env_file: .env
     environment:
@@ -80,7 +80,7 @@ services:
 
   # One-shot, idempotent: org tables + deterministic genesis + telemetry backfill.
   seed:
-    image: ghcr.io/${GHCR_OWNER:-local}/lanka-link-v3-business:${V3_TAG:-latest}
+    image: ghcr.io/${GHCR_OWNER:-dsep-g22}/lanka-link-v3-business:${V3_TAG:-latest}
     build: { context: ., dockerfile: services/business/Dockerfile }
     command: ["python", "-m", "app.genesis"]
     env_file: .env
@@ -91,7 +91,7 @@ services:
     restart: "no"
 
   auth:
-    image: ghcr.io/${GHCR_OWNER:-local}/lanka-link-v3-auth:${V3_TAG:-latest}
+    image: ghcr.io/${GHCR_OWNER:-dsep-g22}/lanka-link-v3-auth:${V3_TAG:-latest}
     build: { context: ., dockerfile: services/auth/Dockerfile }
     env_file: .env
     environment:
@@ -99,13 +99,15 @@ services:
       # Required; auth refuses to boot without it (checked in services/auth/src/auth.ts).
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-}
       NATS_URL: nats://nats:4222
+      # Node's happy-eyeballs gives each address 250 ms; a far Neon region needs longer, and Docker has no IPv6.
+      NODE_OPTIONS: --dns-result-order=ipv4first --no-network-family-autoselection
     depends_on:
       nats: { condition: service_healthy }
       migrate: { condition: service_completed_successfully }
     restart: unless-stopped
 
   gateway:
-    image: ghcr.io/${GHCR_OWNER:-local}/lanka-link-v3-gateway:${V3_TAG:-latest}
+    image: ghcr.io/${GHCR_OWNER:-dsep-g22}/lanka-link-v3-gateway:${V3_TAG:-latest}
     build: { context: ., dockerfile: services/gateway/Dockerfile }
     environment:
       BETTER_AUTH_URL: ${PUBLIC_URL:-http://localhost:8080}
@@ -132,7 +134,7 @@ services:
     restart: unless-stopped
 
   business:
-    image: ghcr.io/${GHCR_OWNER:-local}/lanka-link-v3-business:${V3_TAG:-latest}
+    image: ghcr.io/${GHCR_OWNER:-dsep-g22}/lanka-link-v3-business:${V3_TAG:-latest}
     build: { context: ., dockerfile: services/business/Dockerfile }
     env_file: .env
     environment: &business-env
@@ -145,7 +147,7 @@ services:
 
   # Same image as business, worker mode: the sim clock tick loop.
   business-sim:
-    image: ghcr.io/${GHCR_OWNER:-local}/lanka-link-v3-business:${V3_TAG:-latest}
+    image: ghcr.io/${GHCR_OWNER:-dsep-g22}/lanka-link-v3-business:${V3_TAG:-latest}
     command: ["python", "-m", "app.sim"]
     env_file: .env
     environment: *business-env
@@ -156,7 +158,7 @@ services:
     restart: unless-stopped
 
   payments:
-    image: ghcr.io/${GHCR_OWNER:-local}/lanka-link-v3-payments:${V3_TAG:-latest}
+    image: ghcr.io/${GHCR_OWNER:-dsep-g22}/lanka-link-v3-payments:${V3_TAG:-latest}
     build: { context: ., dockerfile: services/payments/Dockerfile }
     env_file: .env
     environment:
@@ -167,7 +169,7 @@ services:
     restart: unless-stopped
 
   inquiry:
-    image: ghcr.io/${GHCR_OWNER:-local}/lanka-link-v3-inquiry:${V3_TAG:-latest}
+    image: ghcr.io/${GHCR_OWNER:-dsep-g22}/lanka-link-v3-inquiry:${V3_TAG:-latest}
     build: { context: ., dockerfile: services/inquiry/Dockerfile }
     env_file: .env
     environment:
@@ -178,13 +180,13 @@ services:
       NATS_URL: nats://nats:4222
     depends_on:
       migrate: { condition: service_completed_successfully }
-      minio: { condition: service_healthy }
+      minio: { condition: service_started }  # inquiry retries the bucket check via restart
       nats: { condition: service_healthy }
       valkey: { condition: service_healthy }
     restart: unless-stopped
 
   orchestrator:
-    image: ghcr.io/${GHCR_OWNER:-local}/lanka-link-v3-orchestrator:${V3_TAG:-latest}
+    image: ghcr.io/${GHCR_OWNER:-dsep-g22}/lanka-link-v3-orchestrator:${V3_TAG:-latest}
     build: { context: ., dockerfile: services/orchestrator/Dockerfile }
     env_file: .env
     environment:
@@ -211,7 +213,7 @@ services:
     restart: unless-stopped
 
   control:
-    image: ghcr.io/${GHCR_OWNER:-local}/lanka-link-v3-control:${V3_TAG:-latest}
+    image: ghcr.io/${GHCR_OWNER:-dsep-g22}/lanka-link-v3-control:${V3_TAG:-latest}
     build: { context: ., dockerfile: services/control/Dockerfile }
     env_file: .env
     environment: &llm-env
@@ -226,7 +228,7 @@ services:
     restart: unless-stopped
 
   knowledge:
-    image: ghcr.io/${GHCR_OWNER:-local}/lanka-link-v3-knowledge:${V3_TAG:-latest}
+    image: ghcr.io/${GHCR_OWNER:-dsep-g22}/lanka-link-v3-knowledge:${V3_TAG:-latest}
     build: { context: ., dockerfile: services/knowledge/Dockerfile }
     environment:
       <<: *llm-env
@@ -238,7 +240,7 @@ services:
     restart: unless-stopped
 
   grounding:
-    image: ghcr.io/${GHCR_OWNER:-local}/lanka-link-v3-grounding:${V3_TAG:-latest}
+    image: ghcr.io/${GHCR_OWNER:-dsep-g22}/lanka-link-v3-grounding:${V3_TAG:-latest}
     build: { context: ., dockerfile: services/grounding/Dockerfile }
     env_file: .env
     environment:
@@ -251,7 +253,7 @@ services:
     restart: unless-stopped
 
   response:
-    image: ghcr.io/${GHCR_OWNER:-local}/lanka-link-v3-response:${V3_TAG:-latest}
+    image: ghcr.io/${GHCR_OWNER:-dsep-g22}/lanka-link-v3-response:${V3_TAG:-latest}
     build: { context: ., dockerfile: services/response/Dockerfile }
     env_file: .env
     environment:
@@ -266,7 +268,7 @@ services:
     restart: unless-stopped
 
   audio:
-    image: ghcr.io/${GHCR_OWNER:-local}/lanka-link-v3-audio:${V3_TAG:-latest}
+    image: ghcr.io/${GHCR_OWNER:-dsep-g22}/lanka-link-v3-audio:${V3_TAG:-latest}
     build: { context: ., dockerfile: services/audio/Dockerfile }
     environment:
       INQUIRY_URL: http://inquiry:8000
@@ -276,7 +278,7 @@ services:
     restart: unless-stopped
 
   image:
-    image: ghcr.io/${GHCR_OWNER:-local}/lanka-link-v3-image:${V3_TAG:-latest}
+    image: ghcr.io/${GHCR_OWNER:-dsep-g22}/lanka-link-v3-image:${V3_TAG:-latest}
     build: { context: ., dockerfile: services/image/Dockerfile }
     environment:
       INQUIRY_URL: http://inquiry:8000
@@ -285,7 +287,7 @@ services:
     restart: unless-stopped
 
   translation:
-    image: ghcr.io/${GHCR_OWNER:-local}/lanka-link-v3-translation:${V3_TAG:-latest}
+    image: ghcr.io/${GHCR_OWNER:-dsep-g22}/lanka-link-v3-translation:${V3_TAG:-latest}
     build: { context: ., dockerfile: services/translation/Dockerfile }
     environment:
       OMP_NUM_THREADS: "4"
@@ -294,12 +296,14 @@ services:
     restart: unless-stopped
 
   triage:
-    image: ghcr.io/${GHCR_OWNER:-local}/lanka-link-v3-triage:${V3_TAG:-latest}
+    image: ghcr.io/${GHCR_OWNER:-dsep-g22}/lanka-link-v3-triage:${V3_TAG:-latest}
     build: { context: ., dockerfile: services/triage/Dockerfile }
+    # The retrain DAG promotes new TriageModel weights here and calls POST /reload.
+    volumes: ["./ml/models-live:/models-live:ro"]
     restart: unless-stopped
 
   web:
-    image: ghcr.io/${GHCR_OWNER:-local}/lanka-link-v3-web:${V3_TAG:-latest}
+    image: ghcr.io/${GHCR_OWNER:-dsep-g22}/lanka-link-v3-web:${V3_TAG:-latest}
     build: { context: ., dockerfile: web/Dockerfile }
     environment:
       GATEWAY_INTERNAL_URL: http://gateway:8000
@@ -307,7 +311,42 @@ services:
       gateway: { condition: service_healthy }
     restart: unless-stopped
 
+  # -- MLOps (optional): docker compose --profile mlops up -d ------------------------------------
+  mlflow:
+    profiles: ["mlops"]
+    image: ghcr.io/mlflow/mlflow:v2.19.0
+    command: >
+      mlflow server --host 0.0.0.0 --port 5000
+      --backend-store-uri sqlite:////mlflow/mlflow.db
+      --artifacts-destination /mlflow/artifacts --serve-artifacts
+    ports: ["5000:5000"]
+    volumes: [mlflow-data:/mlflow]
+    restart: unless-stopped
+
+  # Weekly TriageModel retrain: DVC pipeline, MLflow gate, promote into ml/models-live, reload triage.
+  # The admin password is printed in the logs (docker compose logs airflow | grep password).
+  airflow:
+    profiles: ["mlops"]
+    image: apache/airflow:2.10.4-python3.12
+    command: standalone
+    ports: ["8081:8080"]
+    environment:
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__DAGS_FOLDER: /opt/repo/ml/dags
+      _PIP_ADDITIONAL_REQUIREMENTS: >-
+        dvc==3.58.0 mlflow==2.19.0 scikit-learn sentence-transformers pydantic
+        torch --extra-index-url https://download.pytorch.org/whl/cpu
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      DSEP_REPO_ROOT: /opt/repo
+      TRIAGE_URL: http://triage:8000
+    volumes:
+      - .:/opt/repo
+    depends_on:
+      mlflow: { condition: service_started }
+    restart: unless-stopped
+
 volumes:
+  mlflow-data:
   nats-data:
   timescale-data:
-  minio-data:
+  objects-data:

@@ -8,6 +8,7 @@ built from OutageIncident.customer_message), never the scenario.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import secrets
 from datetime import datetime, timedelta
@@ -33,6 +34,7 @@ SCENARIOS: dict[str, str] = {
     "fup_exceeded": "Use up the data allowance so the line is shaped.",
     "overdue_invoice": "Raise an invoice that is already past its due date.",
     "planned_work": "Schedule maintenance on the customer's equipment starting soon.",
+    "reset_customer": "Put this customer back to healthy: balance paid, router online, line up, their faults cleared.",
 }
 #: Network-wide scenarios: no subscriber, no fault record (they are clears themselves).
 GLOBAL = {"resolve_outages", "relieve_uplink"}
@@ -443,6 +445,27 @@ async def _noop(conn, ts, fault, detail, now):
     return None
 
 
+async def _reset_customer(conn, ts, t, now):
+    """Undo everything on one customer: a seeded persona can start broken (an offline router),
+    and paying alone cannot bring a line up while the router is off."""
+    for row in await conn.fetch("SELECT * FROM org.active_fault WHERE target_kind = 'subscriber' AND target_ref = $1",
+                                t["id"]):
+        if clearer := CLEARERS.get(row["kind"]):
+            with contextlib.suppress(Exception):
+                await clearer(conn, ts, row, json.loads(row["detail"]) if isinstance(row["detail"], str)
+                              else row["detail"], now)
+    await conn.execute("DELETE FROM org.active_fault WHERE target_kind = 'subscriber' AND target_ref = $1", t["id"])
+    await _restore_account(conn, ts, t, now)
+    if t["serial"]:
+        await conn.execute(
+            """UPDATE org.cpe_device SET wan_status = 'online', uptime_s = 600, lan_clients = 4, last_seen_at = $2,
+                   reboot_count_7d = 0 WHERE serial = $1""", t["serial"], now)
+    if t["circuit_id"]:
+        await conn.execute("UPDATE org.circuit SET status = 'in_service' WHERE id = $1", t["circuit_id"])
+        await lines_up(conn, [t["circuit_id"]], now)
+    return {"subscriber_id": t["id"]}, None
+
+
 HANDLERS = {
     "suspend_account": _suspend_account,
     "restore_account": _restore_account,
@@ -459,6 +482,7 @@ HANDLERS = {
     "fup_exceeded": _fup_exceeded,
     "overdue_invoice": _overdue_invoice,
     "planned_work": _planned_work,
+    "reset_customer": _reset_customer,
 }
 CLEARERS = {
     "suspend_account": _clear_suspension,
@@ -474,7 +498,7 @@ CLEARERS = {
     "planned_work": _clear_planned,
 }
 assert set(HANDLERS) == set(SCENARIOS)
-assert set(CLEARERS) | GLOBAL | {"restore_account", "restore_cpe"} == set(SCENARIOS)
+assert set(CLEARERS) | GLOBAL | {"restore_account", "restore_cpe", "reset_customer"} == set(SCENARIOS)
 
 
 async def apply(conn: asyncpg.Connection, ts, name: str, subscriber_id: str | None, now: datetime, *,
@@ -487,6 +511,12 @@ async def apply(conn: asyncpg.Connection, ts, name: str, subscriber_id: str | No
         t = await conn.fetchrow(_TARGET, subscriber_id)
         if t is None:
             raise LookupError(f"no subscriber matches {subscriber_id}")
+        # Re-injecting would stack a second fault and, for billing scenarios, a second charge.
+        if await conn.fetchval(
+            "SELECT 1 FROM org.active_fault WHERE kind = $1 AND target_ref = ANY($2::text[])",
+            name, [r for r in (t["id"], t["olt_id"], t["cell_site_id"]) if r],
+        ):
+            raise ValueError(f"{name} is already in effect for {subscriber_id}; clear it first")
     result, fault = await HANDLERS[name](conn, ts, t, now, **kwargs)
     if fault is not None:
         target_kind, target_ref, detail = fault

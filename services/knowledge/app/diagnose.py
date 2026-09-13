@@ -54,6 +54,9 @@ class DiagnosisOut(BaseModel):
 
 #: Rules fallback: first match wins. Ordered so a light the customer names beats a generic phrase.
 FAULT_HINTS: tuple[tuple[str, str], ...] = (
+    # A photo (or the customer) naming the power lead beats a generic "cable": it is the power
+    # supply, not the WAN line, and the procedures retrieved for it are the power ones.
+    (r"power (cable|connector|plug|adapter|socket|lead)|round power plug", "fault_power_supply"),
     (r"red.{0,30}(power|light)|(power|light).{0,30}\bred\b|won.?t (turn|power) on|no power", "fault_power_supply"),
     (r"(blinking|flashing) red|keeps? (restarting|rebooting)|reboot", "fault_firmware_crashloop"),
     (r"amber|orange", "fault_service_suspended"),
@@ -117,6 +120,8 @@ async def diagnose(index: Index, graph: Graph, text: str, department: str | None
 
 if __name__ == "__main__":
     assert rules("The power light on my router is red").fault == "fault_power_supply"
+    assert rules("cable disconnect wela [image a1] The photo shows the router's power cable.").fault == "fault_power_supply"
+    assert rules("the cable came out of the router").fault == "fault_cabling"
     assert rules("I was charged twice on this bill").fault == "fault_billing_dispute"
     assert rules("My internet is not working").fault == "fault_line_sync"
     assert rules("internet slows down every evening").fault == "fault_intermittent_connection"

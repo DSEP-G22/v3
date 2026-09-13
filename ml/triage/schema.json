@@ -1,0 +1,646 @@
+{
+  "$defs": {
+    "Channel": {
+      "enum": [
+        "web_portal",
+        "email",
+        "phone",
+        "chat"
+      ],
+      "title": "Channel",
+      "type": "string"
+    },
+    "Department": {
+      "enum": [
+        "technical_support",
+        "billing",
+        "network_operations",
+        "field_service",
+        "sales",
+        "retention",
+        "general"
+      ],
+      "title": "Department",
+      "type": "string"
+    },
+    "ImageEvidence": {
+      "description": "Supplementary evidence attached to a request. Never the request itself.",
+      "properties": {
+        "attachment_id": {
+          "title": "Attachment Id",
+          "type": "string"
+        },
+        "detected_classes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Detected Classes",
+          "type": "array"
+        },
+        "class_confidences": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "title": "Class Confidences",
+          "type": "object"
+        },
+        "device_model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Device Model"
+        },
+        "led_states": {
+          "items": {
+            "$ref": "#/$defs/LedState"
+          },
+          "title": "Led States",
+          "type": "array"
+        },
+        "error_codes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Error Codes",
+          "type": "array"
+        },
+        "caption": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Caption"
+        },
+        "model_version": {
+          "default": "unknown",
+          "title": "Model Version",
+          "type": "string"
+        },
+        "low_confidence": {
+          "default": false,
+          "title": "Low Confidence",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "attachment_id"
+      ],
+      "title": "ImageEvidence",
+      "type": "object"
+    },
+    "LedState": {
+      "properties": {
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "colour": {
+          "title": "Colour",
+          "type": "string"
+        },
+        "behaviour": {
+          "title": "Behaviour",
+          "type": "string"
+        }
+      },
+      "required": [
+        "label",
+        "colour",
+        "behaviour"
+      ],
+      "title": "LedState",
+      "type": "object"
+    },
+    "Modality": {
+      "enum": [
+        "text",
+        "audio",
+        "image",
+        "multimodal"
+      ],
+      "title": "Modality",
+      "type": "string"
+    },
+    "OutageScope": {
+      "description": "How wide the reported fault is. Drives the outage_scope term of the priority score.",
+      "enum": [
+        "single",
+        "local",
+        "regional"
+      ],
+      "title": "OutageScope",
+      "type": "string"
+    },
+    "PriorityBand": {
+      "enum": [
+        "critical",
+        "high",
+        "normal",
+        "low"
+      ],
+      "title": "PriorityBand",
+      "type": "string"
+    },
+    "Provenance": {
+      "properties": {
+        "modality": {
+          "$ref": "#/$defs/Modality"
+        },
+        "source": {
+          "title": "Source",
+          "type": "string"
+        },
+        "span": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "integer"
+            }
+          ],
+          "title": "Span",
+          "type": "array"
+        },
+        "confidence": {
+          "title": "Confidence",
+          "type": "number"
+        },
+        "model_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model Version"
+        }
+      },
+      "required": [
+        "modality",
+        "source",
+        "span",
+        "confidence"
+      ],
+      "title": "Provenance",
+      "type": "object"
+    },
+    "RequestBody": {
+      "description": "WHAT the customer asked -- typed, spoken, or both.\n\n`text` is the whole request as one string, which is what every downstream stage reads.\nWhen the customer both typed and spoke, `typed_text` and `transcript_text` keep the two\nhalves separately addressable, so the agent panel can show which words were transcribed\nand the corpus can measure them apart.",
+      "properties": {
+        "modality": {
+          "$ref": "#/$defs/Modality"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "language": {
+          "default": "en",
+          "title": "Language",
+          "type": "string"
+        },
+        "audio_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Audio Ref"
+        },
+        "duration_s": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration S"
+        },
+        "asr_confidence": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Asr Confidence"
+        },
+        "asr_model_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Asr Model Version"
+        },
+        "segments": {
+          "items": {
+            "$ref": "#/$defs/Segment"
+          },
+          "title": "Segments",
+          "type": "array"
+        },
+        "typed_text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Typed Text"
+        },
+        "transcript_text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Transcript Text"
+        }
+      },
+      "required": [
+        "modality",
+        "text"
+      ],
+      "title": "RequestBody",
+      "type": "object"
+    },
+    "Segment": {
+      "properties": {
+        "start_s": {
+          "title": "Start S",
+          "type": "number"
+        },
+        "end_s": {
+          "title": "End S",
+          "type": "number"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "confidence": {
+          "title": "Confidence",
+          "type": "number"
+        }
+      },
+      "required": [
+        "start_s",
+        "end_s",
+        "text",
+        "confidence"
+      ],
+      "title": "Segment",
+      "type": "object"
+    },
+    "Sentiment": {
+      "enum": [
+        "angry",
+        "frustrated",
+        "neutral",
+        "satisfied"
+      ],
+      "title": "Sentiment",
+      "type": "string"
+    },
+    "Signals": {
+      "description": "Flags extracted from the request text and the image evidence.\n\nRule-prefilled before labelling; the LLM labeller may override any field.",
+      "properties": {
+        "urgency_keywords": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Urgency Keywords",
+          "type": "array"
+        },
+        "colloquial": {
+          "default": false,
+          "title": "Colloquial",
+          "type": "boolean"
+        },
+        "noisy_text": {
+          "default": false,
+          "title": "Noisy Text",
+          "type": "boolean"
+        },
+        "offensive": {
+          "default": false,
+          "title": "Offensive",
+          "type": "boolean"
+        },
+        "polite": {
+          "default": false,
+          "title": "Polite",
+          "type": "boolean"
+        },
+        "interrogative": {
+          "default": false,
+          "title": "Interrogative",
+          "type": "boolean"
+        },
+        "sentiment": {
+          "$ref": "#/$defs/Sentiment",
+          "default": "neutral"
+        },
+        "sentiment_score": {
+          "default": 0.0,
+          "title": "Sentiment Score",
+          "type": "number"
+        },
+        "service_down": {
+          "default": false,
+          "title": "Service Down",
+          "type": "boolean"
+        },
+        "payment_related": {
+          "default": false,
+          "title": "Payment Related",
+          "type": "boolean"
+        },
+        "repeat_contact": {
+          "default": false,
+          "title": "Repeat Contact",
+          "type": "boolean"
+        },
+        "outage_scope": {
+          "$ref": "#/$defs/OutageScope",
+          "default": "single"
+        },
+        "device_visible": {
+          "default": false,
+          "title": "Device Visible",
+          "type": "boolean"
+        },
+        "fault_leds": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Fault Leds",
+          "type": "array"
+        },
+        "error_codes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Error Codes",
+          "type": "array"
+        },
+        "customer_segment_score": {
+          "default": 0.0,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Customer Segment Score",
+          "type": "number"
+        },
+        "prior_contacts_score": {
+          "default": 0.0,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Prior Contacts Score",
+          "type": "number"
+        },
+        "sla_age_score": {
+          "default": 0.0,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Sla Age Score",
+          "type": "number"
+        }
+      },
+      "title": "Signals",
+      "type": "object"
+    },
+    "Triage": {
+      "description": "The prediction target: what the distilled classifier must learn to emit.",
+      "properties": {
+        "intent": {
+          "title": "Intent",
+          "type": "string"
+        },
+        "department": {
+          "$ref": "#/$defs/Department"
+        },
+        "urgency": {
+          "$ref": "#/$defs/PriorityBand"
+        },
+        "priority_score": {
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Priority Score",
+          "type": "integer"
+        },
+        "confidence": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "source": {
+          "$ref": "#/$defs/TriageSource"
+        },
+        "rationale": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rationale"
+        },
+        "signals_detail": {
+          "items": {
+            "$ref": "#/$defs/UrgencySignal"
+          },
+          "title": "Signals Detail",
+          "type": "array"
+        },
+        "alternatives": {
+          "items": {
+            "$ref": "#/$defs/Department"
+          },
+          "title": "Alternatives",
+          "type": "array"
+        },
+        "model_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model Version"
+        }
+      },
+      "required": [
+        "intent",
+        "department",
+        "urgency",
+        "priority_score",
+        "confidence",
+        "source"
+      ],
+      "title": "Triage",
+      "type": "object"
+    },
+    "TriageSource": {
+      "description": "Which mechanism produced a Triage.\n\nMatters for distillation: rows the distilled model labelled itself must never re-enter\nits own training set, or the model trains on its own errors.",
+      "enum": [
+        "rules",
+        "llm",
+        "model",
+        "human"
+      ],
+      "title": "TriageSource",
+      "type": "string"
+    },
+    "UrgencySignal": {
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "weight": {
+          "title": "Weight",
+          "type": "integer"
+        },
+        "matched": {
+          "title": "Matched",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "name",
+        "weight",
+        "matched"
+      ],
+      "title": "UrgencySignal",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "schema_version": {
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "ticket_id": {
+      "title": "Ticket Id",
+      "type": "string"
+    },
+    "customer_id": {
+      "title": "Customer Id",
+      "type": "string"
+    },
+    "channel": {
+      "$ref": "#/$defs/Channel"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "request": {
+      "$ref": "#/$defs/RequestBody"
+    },
+    "images": {
+      "items": {
+        "$ref": "#/$defs/ImageEvidence"
+      },
+      "title": "Images",
+      "type": "array"
+    },
+    "signals": {
+      "$ref": "#/$defs/Signals"
+    },
+    "triage": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Triage"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "fused_text": {
+      "default": "",
+      "title": "Fused Text",
+      "type": "string"
+    },
+    "provenance": {
+      "items": {
+        "$ref": "#/$defs/Provenance"
+      },
+      "title": "Provenance",
+      "type": "array"
+    },
+    "partial": {
+      "default": false,
+      "title": "Partial",
+      "type": "boolean"
+    },
+    "revision": {
+      "default": 1,
+      "title": "Revision",
+      "type": "integer"
+    },
+    "metadata": {
+      "additionalProperties": true,
+      "title": "Metadata",
+      "type": "object"
+    }
+  },
+  "required": [
+    "ticket_id",
+    "customer_id",
+    "channel",
+    "request"
+  ],
+  "title": "UnifiedTicket",
+  "type": "object"
+}

@@ -29,4 +29,14 @@ models/export/
 *.db
 data/
 
+# ML: data is versioned by DVC (ml/triage/data.dvc), outputs are pipeline products
+ml/triage/artifacts/
+ml/triage/mlruns/
+ml/build/
+ml/metrics/
+ml/models-live/*
+!ml/models-live/.gitkeep
+.dvc/cache/
+.dvc/tmp/
+
 PLAN.md
