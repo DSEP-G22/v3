@@ -11,7 +11,13 @@ import os
 from pathlib import Path
 from typing import Any
 
-from lanka_common.contracts import FACT_GROUP_ORDER, ContextBundle, OrgFact
+from lanka_common.contracts import (
+    CUSTOMER_FAULTS,
+    CUSTOMER_SIDE_SIGNALS,
+    FACT_GROUP_ORDER,
+    ContextBundle,
+    OrgFact,
+)
 from lanka_common.punctuation import normalise
 
 CONFIG_DIR = Path(os.environ.get("LANKA_CONFIG_DIR") or Path(__file__).resolve().parents[3] / "config")
@@ -96,10 +102,19 @@ def render_org_facts(b: ContextBundle) -> str:
     return "\n".join(blocks).rstrip() or "  No organisational data was retrieved."
 
 
-def render_causes(b: ContextBundle) -> str:
+def render_causes(b: ContextBundle, side: str = "provider") -> str:
+    """Confirmed causes on one side of the line: the customer's equipment, or our side."""
     lines = [f"  - {CAUSE_LANGUAGE[n]} (established by {t})" for n, t in sorted(b.active_signals().items())
-             if n in CAUSE_LANGUAGE]
-    return "\n".join(lines) or "  Nothing in the operator records explains this on its own. Diagnose from the evidence."
+             if n in CAUSE_LANGUAGE and (n in CUSTOMER_SIDE_SIGNALS) == (side == "customer")]
+    if side == "customer":
+        if b.fault in CUSTOMER_FAULTS:
+            lines.insert(0, f"  - What they describe points at their own equipment: {CUSTOMER_FAULTS[b.fault]}.")
+        # What a photo shows outranks any procedure about a different part of the router.
+        for v in b.payload.visual_summaries:
+            if v.summary_text:
+                lines.insert(0, f"  - {v.summary_text} Every step you give must be about that part of the router.")
+        return "\n".join(lines) or "  Nothing they sent or our records point at their own equipment."
+    return "\n".join(lines) or "  Nothing in the operator records is wrong on our side."
 
 
 def render_evidence(b: ContextBundle) -> str:
@@ -175,6 +190,8 @@ def _hints(b: ContextBundle) -> str:
         "allowance_display": get("get_usage_summary", "allowance_display"),
         "unusual_total_display": get("get_last_invoice_breakdown", "unusual_total_display"),
         "next_appointment_display": get("get_open_work_orders", "next_appointment_display"),
+        "customer_issue": CUSTOMER_FAULTS.get(b.fault or ""),
+        "customer_steps": get("get_device_led_semantics", "repair_steps"),
     }
     return f"<!--grounding-hints {json.dumps({k: v for k, v in hints.items() if v}, ensure_ascii=False)} -->"
 
@@ -187,7 +204,8 @@ def render_prompt(b: ContextBundle, template: str = TEMPLATE) -> str:
         sla_display=b.sla.display, fault=(d.fault if d and d.fault else "not identified"),
         confidence=(f"{d.confidence:.2f}" if d else "not available"),
         rationale=(d.rationale if d else "no diagnosis was produced"), evidence=render_evidence(b),
-        confirmed_causes=render_causes(b), org_facts=render_org_facts(b), device_guidance=render_device_guidance(b),
+        customer_side=render_causes(b, "customer"), provider_side=render_causes(b, "provider"),
+        org_facts=render_org_facts(b), device_guidance=render_device_guidance(b),
         procedures="\n".join(f"  [{s.chunk_id}] {s.text.strip()}" for s in b.sop_passages)
         or "  No procedure passage was retrieved for this case.",
         permitted_actions=render_actions(b), completeness=render_completeness(b), hints=_hints(b),

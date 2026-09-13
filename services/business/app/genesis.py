@@ -36,7 +36,9 @@ def _value(obj: Any, column) -> Any:
 async def _create_tables(direct_dsn: str) -> None:
     from sqlalchemy.ext.asyncio import create_async_engine
 
-    engine = create_async_engine(direct_dsn.replace("postgresql://", "postgresql+asyncpg://", 1))
+    # SQLAlchemy hands URL query params to asyncpg as kwargs, and asyncpg has no `sslmode` kwarg.
+    url = direct_dsn.split("?", 1)[0].replace("postgresql://", "postgresql+asyncpg://", 1)
+    engine = create_async_engine(url, connect_args={"ssl": "require"})
     async with engine.begin() as conn:
         await conn.run_sync(OrgBase.metadata.create_all)
     await engine.dispose()

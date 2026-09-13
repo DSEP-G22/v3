@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from lanka_common.contracts import ContextBundle
+from lanka_common.contracts import CUSTOMER_FAULTS, CUSTOMER_SIDE_SIGNALS, ContextBundle
 
 SEVERITY_ORDER = ("cause", "risk", "context")
 
@@ -74,14 +74,22 @@ SUPERSEDES: dict[str, tuple[str, ...]] = {
 
 
 def summarise(bundle: ContextBundle) -> list[dict[str, Any]]:
+    """Findings, each tagged with its side. Within a severity the customer's own side comes
+    first: the draft answers what they reported before what our records add."""
     active = bundle.active_signals()
     hidden = {w for s, weaker in SUPERSEDES.items() if s in active for w in weaker}
     out = []
+    if (d := bundle.diagnosis) and d.fault in CUSTOMER_FAULTS:
+        words = CUSTOMER_FAULTS[d.fault]
+        out.append({"signal": d.fault, "severity": "cause", "side": "customer",
+                    "headline": "They report a problem with their own equipment",
+                    "detail": words[0].upper() + words[1:] + "."})
     for signal, severity, phrase in RULES:
         if signal in active and signal not in hidden:
             headline, detail = phrase(bundle)
-            out.append({"signal": signal, "severity": severity, "headline": headline, "detail": detail})
-    return sorted(out, key=lambda f: SEVERITY_ORDER.index(f["severity"]))
+            out.append({"signal": signal, "severity": severity, "headline": headline, "detail": detail,
+                        "side": "customer" if signal in CUSTOMER_SIDE_SIGNALS else "provider"})
+    return sorted(out, key=lambda f: (SEVERITY_ORDER.index(f["severity"]), f["side"] != "customer"))
 
 
 def headline(bundle: ContextBundle) -> str:

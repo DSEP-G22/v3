@@ -25,6 +25,21 @@ def band_for(level: int) -> Band:
     return "critical" if level >= 9 else "high" if level >= 7 else "normal" if level >= 4 else "low"
 
 
+#: Faults on the customer's own side of the line, in words a reply can open with. The draft
+#: addresses these first, then anything on our side (PROVIDER_SIDE_SIGNALS).
+#: Only equipment faults: "not working" alone is as likely an outage as a loose cable.
+CUSTOMER_FAULTS: dict[str, str] = {
+    "fault_cabling": "a cable on the router has come loose or been disconnected",
+    "fault_power_supply": "the router's power cable has come loose or the router is not getting power",
+    "fault_firmware_crashloop": "the router keeps restarting",
+    "fault_wifi": "the Wi-Fi at the premises is not working as it should",
+}
+#: Record signals that describe the customer's own equipment rather than our network or account.
+CUSTOMER_SIDE_SIGNALS: frozenset[str] = frozenset({
+    "cpe_offline", "reboot_loop_suspected", "firmware_behind", "premises_fault_likely", "known_issue_applies",
+})
+
+
 class Frozen(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -84,6 +99,8 @@ class Triage(Frozen):
     routed_by: str = ""
     sentiment: str = "neutral"
     signals: dict[str, Any] = Field(default_factory=dict)
+    #: The distilled TriageModel's read of the request (level, band, score, confidence, source).
+    customer_priority: dict[str, Any] = Field(default_factory=dict)
 
 
 class Citation(Frozen):
@@ -188,6 +205,11 @@ class Priority(Frozen):
     band: Band
     base_level: int
     reasons: list[dict[str, Any]] = Field(default_factory=list)
+    #: customer: the request itself, scored by the TriageModel. provider: what our records say
+    #: is wrong on our side, scored by rules. combined: the queue order, the higher of the two.
+    side: Literal["combined", "customer", "provider"] = "combined"
+    source: str = "rules"
+    score: int | None = None
 
 
 class ContextBundle(Frozen):
@@ -209,6 +231,8 @@ class ContextBundle(Frozen):
     permitted_actions: list[ActionEntry] = Field(default_factory=list)
     completeness: Completeness = Field(default_factory=Completeness)
     priority: Priority
+    customer_priority: Priority | None = None
+    provider_priority: Priority | None = None
 
     @property
     def fault(self) -> str | None:

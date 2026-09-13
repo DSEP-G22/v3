@@ -16,6 +16,7 @@ import asyncio
 import contextlib
 import json
 import os
+import re
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from datetime import datetime, timezone
@@ -26,7 +27,8 @@ import httpx
 from fastapi import FastAPI, HTTPException
 
 from app.fusion import Part, fuse
-from lanka_common import bus
+from lanka_common import bus, tracing
+from lanka_common.contracts import band_for
 from lanka_common.db import POOLER_KWARGS, parse_neon_key
 
 BUSINESS_URL = os.environ.get("BUSINESS_URL", "http://business:8000")
@@ -66,6 +68,9 @@ CREATE TABLE IF NOT EXISTS cases."case" (
     closed_at       timestamptz
 );
 ALTER TABLE cases."case" ADD COLUMN IF NOT EXISTS replied_at timestamptz;
+-- The two separate priorities: the request (TriageModel) and our side (grounding rules).
+ALTER TABLE cases."case" ADD COLUMN IF NOT EXISTS customer_priority jsonb;
+ALTER TABLE cases."case" ADD COLUMN IF NOT EXISTS provider_priority jsonb;
 CREATE INDEX IF NOT EXISTS ix_case_open ON cases."case" (state, priority_level DESC, opened_at) WHERE closed_at IS NULL;
 CREATE TABLE IF NOT EXISTS cases.stage_event (
     id         bigserial PRIMARY KEY,
@@ -139,13 +144,16 @@ async def stage(name: str, ev: dict[str, Any], case_id: str, rev: int, body: dic
     url = os.environ.get(f"{name.upper()}_URL")
     started = time.perf_counter()
     try:
-        async with asyncio.timeout(BUDGET_S[name]):
-            if url:
-                r = await http.post(f"{url}/run", json=body)
-                r.raise_for_status()
-                out = r.json()
-            else:
-                out = await stub()
+        with tracing.span(name, run_type="chain" if name != "response" else "llm", inputs=body,
+                          stage=name, case_id=case_id, revision=rev, via="service" if url else "stub") as run:
+            async with asyncio.timeout(BUDGET_S[name]):
+                if url:
+                    r = await http.post(f"{url}/run", json=body, headers=tracing.headers())
+                    r.raise_for_status()
+                    out = r.json()
+                else:
+                    out = await stub()
+            tracing.finish(run, out if isinstance(out, dict) else {"output": out})
         _record(case_id, rev, name, "done", int((time.perf_counter() - started) * 1000), via="service" if url else "stub")
         return out
     except asyncio.CancelledError:
@@ -159,8 +167,29 @@ async def stage(name: str, ev: dict[str, Any], case_id: str, rev: int, body: dic
 # -- stubs (replaced by services as phases land) ------------------------------------------------
 
 
+#: Romanised Sinhala and Tamil markers, for when the translation service is not running. Only
+#: words that are not also common English, and two hits are needed, so English is never misread.
+SINGLISH = frozenset({"mage", "mata", "eka", "eke", "ekak", "wada", "naha", "nane", "mokada", "kranna", "karanna",
+                      "wela", "thiyenawa", "kiyala", "denna", "ganna", "neda", "ane", "mama", "oya", "nisa",
+                      "wenawa", "karala", "hari", "wenne", "puluwan", "ona", "meka", "kohomada", "dan"})
+TANGLISH = frozenset({"enakku", "illai", "illa", "romba", "irukku", "vandhu", "panna", "pannunga", "sollunga",
+                      "enna", "epdi", "konjam", "seiyala", "varala", "podhum", "unga", "ennoda"})
+
+
+def latin_language(text: str) -> str | None:
+    words = re.findall(r"[a-z]+", text.lower())
+    si, ta = sum(w in SINGLISH for w in words), sum(w in TANGLISH for w in words)
+    if max(si, ta) < 2:
+        return None
+    return "si-Latn" if si >= ta else "ta-Latn"
+
+
 async def _translate_stub(text: str, hint: str) -> dict[str, Any]:
-    return {"language": hint or "en", "text_en": text, "translated": False, "coverage": 1.0}
+    """No translation service: keep the text, but still say which language to reply in."""
+    lang = hint or "en"
+    if lang == "en":
+        lang = latin_language(text) or "en"
+    return {"language": lang, "reply_language": lang, "text_en": text, "translated": False, "coverage": 1.0}
 
 
 async def _prefetch(subscriber_id: str | None) -> dict[str, Any]:
@@ -177,6 +206,14 @@ async def _prefetch(subscriber_id: str | None) -> dict[str, Any]:
 
 
 async def run(ev: dict[str, Any], case_id: str, rev: int) -> None:
+    """One LangSmith trace per case revision; every stage below nests under it."""
+    with tracing.span(f"case {case_id} r{rev}", inputs={"text": ev["text"], "attachments": len(ev["attachments"]),
+                                                        "language_hint": ev["language_hint"]},
+                      case_id=case_id, revision=rev, subscriber_id=ev["subscriber_id"], origin=ev["origin"]) as root:
+        tracing.finish(root, await _run(ev, case_id, rev))
+
+
+async def _run(ev: dict[str, Any], case_id: str, rev: int) -> dict[str, Any]:
     await _set(case_id, state="PROCESSING")
     await _notify(ev, "stage", {"case_id": case_id, "revision": rev, "chip": "reading"})
 
@@ -230,13 +267,18 @@ async def run(ev: dict[str, Any], case_id: str, rev: int) -> None:
 
     await _notify(ev, "stage", {"case_id": case_id, "revision": rev, "chip": "checking"})
     facts = (prefetched or {}).get("results", {})
+    sla = facts.get("get_sla_position") or {}
     triage = await stage("triage", ev, case_id, rev, {
         "fused_text": fused_text,
         "segment": (facts.get("get_subscriber_profile") or {}).get("segment", "consumer"),
         "repeat_contact": bool((facts.get("get_prior_tickets") or {}).get("is_repeat_contact")),
+        "sla_age_score": 1.0 if sla.get("sla_breached") else 0.7 if sla.get("sla_at_risk") else 0.0,
     }, lambda: asyncio.sleep(0, {"department": "technical_support", "base_level": 5, "signals": []}))
     triage = triage or {"department": "technical_support", "base_level": 5, "signals": []}
-    await _set(case_id, state="TRIAGED", department=triage["department"], priority_level=triage["base_level"],
+    customer = triage.get("customer_priority") or {}
+    first_level = int(customer.get("level") or triage["base_level"])
+    await _set(case_id, state="TRIAGED", department=triage["department"], priority_level=first_level,
+               band=band_for(first_level), customer_priority=json.dumps(customer) if customer else None,
                summary=fused_text.split("] ", 1)[-1][:140])
     diagnosis = await stage("diagnose", ev, case_id, rev, {"fused_text": fused_text, "department": triage["department"]},
                             lambda: asyncio.sleep(0, {"fault": None, "confidence": 0.0, "citations": []}))
@@ -254,7 +296,9 @@ async def run(ev: dict[str, Any], case_id: str, rev: int) -> None:
         "transcripts": [{**t, "attachment_id": a["id"]} if t else None for a, t in zip(audio, transcripts)],
     }, lambda: asyncio.sleep(0, {"priority_level": triage["base_level"], "band": "normal", "bundle_id": None}))
     if grounded:
-        await _set(case_id, state="DIAGNOSED", priority_level=grounded.get("priority_level"), band=grounded.get("band"))
+        await _set(case_id, state="DIAGNOSED", priority_level=grounded.get("priority_level"), band=grounded.get("band"),
+                   customer_priority=json.dumps(grounded.get("customer_priority")),
+                   provider_priority=json.dumps(grounded.get("provider_priority")))
 
     await _notify(ev, "stage", {"case_id": case_id, "revision": rev, "chip": "writing"})
     outcome = await stage("response", ev, case_id, rev, {
@@ -270,6 +314,9 @@ async def run(ev: dict[str, Any], case_id: str, rev: int) -> None:
         await _notify(ev, "stage", {"case_id": case_id, "revision": rev, "chip": "held",
                                     "expected": ((prefetched or {}).get("results", {}).get("get_sla_position") or {})
                                     .get("response_due_display")})
+    return {"decision": decision, "department": triage["department"], "language": language,
+            "priority_level": (grounded or {}).get("priority_level", first_level),
+            "customer_priority": customer, "provider_priority": (grounded or {}).get("provider_priority")}
 
 
 async def _set(case_id: str, **fields: Any) -> None:

@@ -155,12 +155,16 @@ async def billing(c: Customer) -> dict[str, Any]:
     _, sid = c
     r = await batch(sid, screens.BILLING_TOOLS, get_billing_history={"months": 12})
     history = r["get_billing_history"]
+    ledger = r.get("get_ledger_window") or {}
     return {
         "summary": screens.billing_summary(r["get_payment_status"]),
-        "invoices": [{k: i[k] for k in ("invoice_no", "period_display", "issued_display", "due_display",
-                                        "total_display", "status", "status_display")}
+        "invoices": [{k: i.get(k) for k in ("invoice_no", "period_display", "issued_display", "due_display",
+                                            "total", "total_display", "status", "status_display")}
                      for i in history.get("invoices", [])],
         "latest": r["get_last_invoice_breakdown"],
+        "activity": [{k: e.get(k) for k in ("posted_display", "description", "kind", "debit_display", "credit_display",
+                                            "balance_after_display")} for e in (ledger.get("entries") or [])[:12]],
+        "change_display": history.get("change_display"),
     }
 
 
@@ -231,6 +235,12 @@ async def pay_intent(intent_id: str, body: PayIn, p: Principal) -> Any:
     return result
 
 
+@app.post("/api/app/balance/pay", status_code=201)
+async def pay_balance(c: Customer) -> Any:
+    p, _ = c
+    return await _upstream("POST", f"{BUSINESS_URL}/accounts/balance/intent", json={"user_id": p["sub"]})
+
+
 @app.post("/api/app/invoices/{invoice_id}/pay", status_code=201)
 async def pay_invoice(invoice_id: str, c: Customer) -> Any:
     p, _ = c
@@ -248,7 +258,71 @@ async def send_message(request: Request, c: Customer) -> Any:
     files = [("files", (f.filename or "file", await f.read(), f.content_type or "application/octet-stream"))
              for f in form.getlist("files") if hasattr(f, "read")]
     data = {"user_id": p["sub"], "subscriber_id": sid, "origin": "customer", "text": str(form.get("text") or "")}
+    # No ticket id opens a new ticket; with one, the message is a reply on that ticket.
+    for key in ("conversation_id", "subject", "category"):
+        if value := str(form.get(key) or "").strip():
+            data[key] = value
     return await _upstream("POST", f"{INQUIRY_URL}/messages", data=data, files=files or None)
+
+
+# -- tickets ------------------------------------------------------------------------------------
+
+#: What a case state means to the customer. Never the state name itself.
+TICKET_STAGE = {"RECEIVED": "Received", "PROCESSING": "Reading your message", "AGGREGATED": "Reading your message",
+                "TRIAGED": "Checking your account", "DIAGNOSED": "Writing a reply", "AWAITING_APPROVAL": "With our team",
+                "IN_REVIEW": "With our team", "RESOLVED": "Answered", "CLOSED": "Closed"}
+
+
+@app.get("/api/app/tickets")
+async def my_tickets(c: Customer) -> Any:
+    p, _ = c
+    return await _upstream("GET", f"{INQUIRY_URL}/tickets", params={"user_id": p["sub"]})
+
+
+@app.get("/api/app/tickets/{ticket_id}")
+async def my_ticket(ticket_id: str, c: Customer) -> Any:
+    p, _ = c
+    data = await _upstream("GET", f"{INQUIRY_URL}/tickets/{ticket_id}", params={"user_id": p["sub"]})
+    stage = None
+    if case_id := data["ticket"].get("open_case_id"):
+        try:
+            state = (await _upstream("GET", f"{ORCHESTRATOR_URL}/cases/{case_id}"))["case"]["state"]
+            stage = TICKET_STAGE.get(state)
+        except HTTPException:
+            stage = None
+    return {**data, "stage": stage}
+
+
+class TicketFeedbackIn(BaseModel):
+    rating: int = Field(ge=1, le=5)
+    comment: str = Field(default="", max_length=1000)
+
+
+@app.post("/api/app/tickets/{ticket_id}/feedback")
+async def ticket_feedback(ticket_id: str, body: TicketFeedbackIn, c: Customer) -> Any:
+    p, _ = c
+    return await _upstream("POST", f"{INQUIRY_URL}/tickets/{ticket_id}/feedback",
+                           json={**body.model_dump(), "user_id": p["sub"]})
+
+
+@app.post("/api/app/tickets/{ticket_id}/close")
+async def close_ticket(ticket_id: str, c: Customer) -> Any:
+    p, _ = c
+    out = await _upstream("POST", f"{INQUIRY_URL}/tickets/{ticket_id}/close", params={"user_id": p["sub"]})
+    if case_id := out.get("open_case_id"):
+        try:
+            await _upstream("POST", f"{ORCHESTRATOR_URL}/cases/{case_id}/close",
+                            params={"user_id": p["sub"], "reason": "solved"})
+        except HTTPException:
+            pass  # the case already closed; the ticket state is what the customer sees
+    return {"id": out["id"], "status": out["status"]}
+
+
+@app.get("/api/app/notices")
+async def notices(c: Customer) -> dict[str, Any]:
+    """Known issues on our side, as ready made templates the ticket screens can show."""
+    _, sid = c
+    return {"notices": screens.notices(await batch(sid, screens.NOTICE_TOOLS))}
 
 
 @app.get("/api/app/conversation")

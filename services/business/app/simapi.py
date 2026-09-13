@@ -94,11 +94,18 @@ async def list_scenarios() -> dict[str, Any]:
 
 class Inject(BaseModel):
     subscriber_ref: str | None = None
+    #: Network scenarios aimed at a piece of equipment: any customer on that OLT anchors it.
+    olt_ref: str | None = None
     params: dict[str, Any] = Field(default_factory=dict)
 
 
 @router.post("/scenarios/{name}")
 async def inject(name: str, body: Inject) -> dict[str, Any]:
+    if body.olt_ref and not body.subscriber_ref:
+        body.subscriber_ref = await db.neon.fetchval(
+            "SELECT subscriber_id FROM org.circuit WHERE olt_id = $1 ORDER BY subscriber_id LIMIT 1", body.olt_ref)
+        if body.subscriber_ref is None:
+            raise HTTPException(404, "No customer is connected to that OLT.")
     sid = await loader.resolve_id(body.subscriber_ref) if body.subscriber_ref else None
     if name not in scenarios.GLOBAL and sid is None:
         raise HTTPException(404, "No subscriber matches that reference.")

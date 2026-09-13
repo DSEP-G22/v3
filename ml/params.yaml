@@ -1,0 +1,8 @@
+train:
+  epochs: 25
+  seed: 13
+
+gate:
+  # A candidate must beat production macro-F1 by this much, inside the latency budget.
+  min_improvement: 0.01
+  max_latency_ms: 10

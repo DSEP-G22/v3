@@ -2,7 +2,7 @@ FROM python:3.12-slim
 COPY --from=ghcr.io/astral-sh/uv:0.7 /uv /bin/uv
 WORKDIR /srv
 COPY packages/common packages/common
-RUN uv pip install --system --no-cache ./packages/common \
+RUN --mount=type=cache,target=/root/.cache/uv uv pip install --system ./packages/common \
     "fastapi>=0.115" "uvicorn[standard]>=0.30" "python-multipart>=0.0.9" "redis>=5" "minio>=7.2"
 COPY services/inquiry/app app
 HEALTHCHECK --interval=5s --timeout=3s --retries=30 CMD python -c "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/health')"

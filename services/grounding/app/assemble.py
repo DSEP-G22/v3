@@ -121,5 +121,7 @@ def build(*, case_id: str, revision: int, payload: Payload, triage: Triage, diag
         permitted_actions=action_policy.filter_actions(registry, department, plan.fault, facts),
         completeness=done,
         priority=priority_policy.assign(triage.base_level, base_reason, facts, sla, done),
+        customer_priority=priority_policy.customer(triage),
+        provider_priority=priority_policy.provider(facts, sla),
     )
     return bundle, plan, unused

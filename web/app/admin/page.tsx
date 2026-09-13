@@ -15,7 +15,40 @@ type Stats = {
   series: { hour: string; opened: number }[];
 };
 
+type Feedback = { rated: number; average: number | null; happy: number; unhappy: number;
+  recent: { id: string; subject: string | null; rating: number; feedback: string | null; feedback_at: string }[] };
+
 const config = { opened: { label: "Cases opened", color: "var(--chart-1)" } } satisfies ChartConfig;
+
+function FeedbackCard() {
+  const { data } = useApi<Feedback>("/admin/feedback");
+  return (
+    <Card>
+      <CardHeader>
+        <CardDescription>Customer feedback, last 30 days</CardDescription>
+        <CardTitle className="flex items-baseline gap-2 text-2xl tabular-nums">
+          {data?.average != null ? data.average.toFixed(1) : "No ratings yet"}
+          {data?.average != null && <span className="text-sm font-normal text-muted-foreground">out of 5 from {data.rated} tickets</span>}
+        </CardTitle>
+      </CardHeader>
+      {!!data?.recent.length && (
+        <CardContent>
+          <ul className="divide-y text-sm">
+            {data.recent.map((r) => (
+              <li key={r.id} className="flex gap-3 py-2">
+                <span className="w-16 shrink-0 text-gold" aria-label={`${r.rating} of 5`}>{"★".repeat(r.rating)}<span className="text-muted">{"★".repeat(5 - r.rating)}</span></span>
+                <span className="min-w-0">
+                  <span className="block truncate font-medium">{r.subject}</span>
+                  {r.feedback && <span className="text-muted-foreground">{r.feedback}</span>}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </CardContent>
+      )}
+    </Card>
+  );
+}
 
 function minutes(s: number | null) {
   if (s == null) return "No replies yet";
@@ -66,6 +99,7 @@ export default function Overview() {
           )}
         </CardContent>
       </Card>
+      <FeedbackCard />
     </div>
   );
 }

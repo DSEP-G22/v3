@@ -183,16 +183,25 @@ async def rebind(role: str, b: Rebind) -> dict[str, Any]:
 
 
 @app.post("/bindings/{role}/probe")
-async def probe(role: str) -> dict[str, Any]:
+async def probe(role: str, deep: bool = False) -> dict[str, Any]:
+    """ping() checks the endpoint knows the model; deep=true makes it actually generate."""
+    import asyncio
+
     b = await binding(role)
     started = time.perf_counter()
     if not role.startswith("llm_") or b["impl"] == "rules":
         status, detail = "unknown", "Probed through the service health check."
     else:
         try:
-            status, detail = await build(b["impl"], b["model_version"], b["params"], dict(os.environ)).ping()
-        except LLMUnavailable as exc:
-            status, detail = "down", str(exc)
+            llm = build(b["impl"], b["model_version"], b["params"], dict(os.environ))
+            status, detail = await llm.ping()
+            if deep and status != "down":
+                t = time.perf_counter()
+                reply = (await asyncio.wait_for(llm.generate("Reply with the single word OK."), timeout=45)).strip()
+                status, detail = (("reachable", f"generated a reply in {int((time.perf_counter() - t) * 1000)} ms: "
+                                   f"{reply[:40]!r}") if reply else ("degraded", "the model returned an empty reply"))
+        except (LLMUnavailable, TimeoutError) as exc:
+            status, detail = "down", str(exc) or "the model did not answer within 45 seconds"
     ms = int((time.perf_counter() - started) * 1000)
     await rt.pool.execute("""UPDATE control.model_binding SET probe_status = $2, probe_detail = $3, probe_ms = $4,
                              probe_at = now() WHERE role = $1""", role, status, detail[:480], ms)

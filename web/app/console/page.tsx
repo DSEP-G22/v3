@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { PriorityPair, type SidePriority } from "@/components/priority-pair";
 import { StatusDot } from "@/components/status-dot";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,8 @@ type Row = {
   department: string | null;
   priority_level: number | null;
   band: string | null;
+  customer_priority: SidePriority;
+  provider_priority: SidePriority;
   state: string;
   opened_at: string;
 };
@@ -90,7 +93,10 @@ export default function Inbox() {
                   <TableCell>
                     <Badge variant="secondary">{department(c.department)}</Badge>
                   </TableCell>
-                  <TableCell className="tabular-nums">{priority(c.priority_level, c.band)}</TableCell>
+                  <TableCell>
+                    <span className="block font-medium tabular-nums">{priority(c.priority_level, c.band)}</span>
+                    <PriorityPair customer={c.customer_priority} provider={c.provider_priority} className="mt-0.5" />
+                  </TableCell>
                   <TableCell className="tabular-nums text-muted-foreground">{waiting(c.opened_at)}</TableCell>
                   <TableCell>
                     <StatusDot

@@ -1,0 +1,5 @@
+data/*.jsonl
+data/label_cache.json
+data/embedding_cache/
+artifacts/*.pt
+__pycache__/

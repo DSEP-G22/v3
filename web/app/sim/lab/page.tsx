@@ -12,7 +12,7 @@ import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { bearer, useApi, useStream } from "@/lib/api";
+import { ApiError, bearer, post, useApi, useStream } from "@/lib/api";
 import { department, priority } from "@/lib/format";
 
 const SAMPLES = [
@@ -24,6 +24,15 @@ const SAMPLES = [
 ];
 const LANGS = [{ value: "", label: "Detect it" }, { value: "si", label: "Sinhala" }, { value: "ta", label: "Tamil" },
   { value: "en", label: "English" }];
+/** Problems on the customer's own side, set up on their account before the message is sent. */
+const SIDE = [
+  { value: "", label: "None, as the account stands" },
+  { value: "drop_cpe", label: "Router unplugged or powered off" },
+  { value: "firmware_crashloop", label: "Router stuck restarting" },
+  { value: "line_degradation", label: "Weak fibre signal at the premises" },
+  { value: "fup_exceeded", label: "Data allowance used up" },
+  { value: "suspend_account", label: "Account paused for non payment" },
+];
 
 type Event = { at: number; kind: string; text: string };
 type Case = { case: { id: string; department: string | null; priority_level: number | null; band: string | null;
@@ -42,6 +51,20 @@ function Lab() {
   const [events, setEvents] = useState<Event[]>([]);
   const [caseId, setCaseId] = useState<string | null>(null);
   const [started, setStarted] = useState(0);
+  const [issue, setIssue] = useState("");
+  const [resetting, setResetting] = useState(false);
+
+  async function reset() {
+    setResetting(true);
+    try {
+      await post(`/sim/scenarios/reset_customer`, { subscriber_ref: sub });
+      toast.success("Customer is healthy again: paid up, router online, line up.");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setResetting(false);
+    }
+  }
   const detail = useApi<Case>(caseId ? `/lab/cases/${caseId}` : null);
 
   useStream(`/lab/stream/${sub}`, (kind, payload) => {
@@ -60,6 +83,16 @@ function Lab() {
     setEvents([]);
     setCaseId(null);
     setStarted(Date.now());
+    if (issue) {
+      try {
+        await post(`/sim/scenarios/${issue}`, { subscriber_ref: sub });
+      } catch (e) {
+        // Already in effect is fine: the customer is in the state the test needs.
+        if (!(e instanceof ApiError && e.status === 422)) return toast.error((e as Error).message);
+      }
+      const label = SIDE.find((s) => s.value === issue)?.label ?? issue;
+      setEvents([{ at: Date.now(), kind: "injected", text: `On the customer's side: ${label.toLowerCase()}` }]);
+    }
     const form = new FormData();
     form.set("subscriber_ref", sub);
     form.set("text", text);
@@ -68,7 +101,7 @@ function Lab() {
     const t = await bearer();
     const r = await fetch("/api/lab/inquiries", { method: "POST", body: form, headers: t ? { authorization: `Bearer ${t}` } : {} });
     if (!r.ok) return toast.error((await r.json().catch(() => ({}))).detail ?? "Could not send.");
-    setEvents([{ at: Date.now(), kind: "sent", text: "Acknowledged" }]);
+    setEvents((ev) => [...ev, { at: Date.now(), kind: "sent", text: "Acknowledged" }]);
     void runs.reload();
   }
 
@@ -98,6 +131,16 @@ function Lab() {
                   <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>{LANGS.map((l) => <SelectItem key={l.label} value={l.value}>{l.label}</SelectItem>)}</SelectContent>
                 </Select>
+              </Field>
+              <Field>
+                <FieldLabel>Problem on the customer&apos;s side</FieldLabel>
+                <Select value={issue} onValueChange={(v) => setIssue(String(v ?? ""))} items={SIDE}>
+                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>{SIDE.map((s) => <SelectItem key={s.label} value={s.value}>{s.label}</SelectItem>)}</SelectContent>
+                </Select>
+                <Button size="xs" variant="ghost" className="self-start" disabled={resetting} onClick={reset}>
+                  {resetting ? "Resetting" : "Reset this customer to healthy"}
+                </Button>
               </Field>
               <Field>
                 <FieldLabel htmlFor="msg">Message</FieldLabel>

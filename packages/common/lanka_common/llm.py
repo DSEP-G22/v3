@@ -207,6 +207,20 @@ class Stub:
         hints = _hints(prompt)
         s = set(hints.get("signals", []))
         lines = [f"Hello {hints.get('preferred_name') or 'there'},"]
+        # The customer's own side first (a cable, the router), then anything on our side.
+        head = ""
+        if issue := hints.get("customer_issue"):
+            head = f"Thank you for the details. From what you sent, {issue}."
+            if steps := hints.get("customer_steps"):
+                head += " Here is what to try on your side:\n" + "\n".join(
+                    f"{i}. {step}" for i, step in enumerate(steps, 1)) + "\n"
+            else:
+                head += (" If you can, send a photo of the back of the router so we can see which socket the "
+                         "cable belongs in.")
+        if head:
+            lines.append(head)
+            if s & PROVIDER_STUB_SIGNALS:
+                lines.append("There is also something on our side you should know about.")
         if "suspended_for_nonpayment" in s:
             lines.append(f"Your service is paused because {hints.get('outstanding_balance_display', 'a balance')} "
                          "is outstanding on the account. Service comes back once that payment is received.")
@@ -248,6 +262,12 @@ class Stub:
 
     async def ping(self) -> tuple[str, str]:
         return "reachable", "the offline generator is always available"
+
+
+PROVIDER_STUB_SIGNALS = frozenset({
+    "suspended_for_nonpayment", "outage_explains_symptom", "in_active_outage", "has_unusual_charge",
+    "evening_congestion", "over_fup", "near_cap", "visit_already_booked",
+})
 
 
 def _hints(prompt: str) -> dict[str, Any]:

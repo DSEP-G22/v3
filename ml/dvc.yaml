@@ -1,0 +1,38 @@
+# TriageModel retraining pipeline. `dvc repro` from this folder (the Airflow DAG does the same).
+# Data under triage/data is versioned with `dvc add triage/data` (the DAG's first task).
+stages:
+  train:
+    wdir: triage/train
+    cmd: python train_triage.py --skip-baselines --epochs ${train.epochs} --seed ${train.seed}
+    deps:
+      - ../train
+      - ../schema.py
+      - ../data/train.jsonl
+      - ../data/gold.jsonl
+    params:
+      - ../../params.yaml:
+          - train
+    outs:
+      - ../artifacts/triage_multitask.pt
+    metrics:
+      - ../artifacts/score_table.json:
+          cache: false
+
+  export:
+    cmd: python export_triage.py triage/artifacts/triage_multitask.pt build/triage
+    deps:
+      - export_triage.py
+      - triage/artifacts/triage_multitask.pt
+    outs:
+      - build/triage
+
+  evaluate:
+    cmd: python evaluate.py
+    deps:
+      - evaluate.py
+      - triage/artifacts/score_table.json
+    params:
+      - gate
+    metrics:
+      - metrics/candidate.json:
+          cache: false

@@ -1,12 +1,27 @@
 "use client";
 
+import {
+  ActivityIcon,
+  BotIcon,
+  CpuIcon,
+  FlaskConicalIcon,
+  GlobeIcon,
+  InboxIcon,
+  LayoutDashboardIcon,
+  LogOutIcon,
+  MapIcon,
+  NetworkIcon,
+  ScrollTextIcon,
+  SirenIcon,
+  UsersIcon,
+  type LucideIcon,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 
-import { Brand } from "@/components/brand";
+import { LOGO_RATIO, LogoMark } from "@/components/logo";
 import { roleOf, type Role } from "@/components/role-gate";
-import { Button } from "@/components/ui/button";
 import {
   CommandDialog,
   CommandEmpty,
@@ -29,33 +44,68 @@ import {
   SidebarMenuItem,
   SidebarProvider,
   SidebarTrigger,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { api, forgetToken } from "@/lib/api";
 import { signOut, useSession } from "@/lib/auth-client";
+import { cn } from "@/lib/utils";
 
-type NavItem = { href: string; label: string };
+type NavItem = { href: string; label: string; icon: LucideIcon };
 const GROUPS: { label: string; roles: Role[]; items: NavItem[] }[] = [
-  { label: "Console", roles: ["agent", "lead", "admin"], items: [{ href: "/console", label: "Inbox" }] },
+  { label: "Console", roles: ["agent", "lead", "admin"], items: [{ href: "/console", label: "Inbox", icon: InboxIcon }] },
   {
     label: "Admin", roles: ["admin"], items: [
-      { href: "/admin", label: "Overview" },
-      { href: "/admin/autoreply", label: "Auto reply" },
-      { href: "/admin/models", label: "Models" },
-      { href: "/admin/grounding", label: "Grounding plan" },
-      { href: "/admin/traces", label: "Traces" },
-      { href: "/admin/users", label: "Users and roles" },
+      { href: "/admin", label: "Overview", icon: LayoutDashboardIcon },
+      { href: "/admin/autoreply", label: "Auto reply", icon: BotIcon },
+      { href: "/admin/models", label: "Models", icon: CpuIcon },
+      { href: "/admin/grounding", label: "Grounding plan", icon: MapIcon },
+      { href: "/admin/traces", label: "Traces", icon: ActivityIcon },
+      { href: "/admin/users", label: "Users and roles", icon: UsersIcon },
     ],
   },
   {
     label: "Simulation", roles: ["operator", "admin"], items: [
-      { href: "/sim", label: "Network" },
-      { href: "/sim/scenarios", label: "Scenarios" },
-      { href: "/sim/customers", label: "Customers" },
-      { href: "/sim/lab", label: "Test lab" },
-      { href: "/sim/events", label: "Event log" },
+      { href: "/sim", label: "Network", icon: NetworkIcon },
+      { href: "/sim/scenarios", label: "Incidents", icon: SirenIcon },
+      { href: "/sim/customers", label: "Customers", icon: UsersIcon },
+      { href: "/sim/requests", label: "Customer requests", icon: ActivityIcon },
+      { href: "/sim/lab", label: "Test lab", icon: FlaskConicalIcon },
+      { href: "/sim/events", label: "Event log", icon: ScrollTextIcon },
     ],
   },
 ];
+const ROOTS = ["/console", "/admin", "/sim"];
+
+const EASE = "duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]";
+
+/**
+ * The full logo when expanded, the mark alone when collapsed. The mark is the logo's left
+ * edge, so one clipping frame that narrows to it turns one into the other. Collapsed, the mark
+ * is the button that opens the sidebar again; the fold control only shows when expanded.
+ */
+function SidebarBrand({ home }: { home: string }) {
+  const { state, toggleSidebar } = useSidebar();
+  const collapsed = state === "collapsed";
+  const h = 28;
+  return (
+    <SidebarHeader className="flex-row items-center gap-2 px-2.5 py-3 group-data-[collapsible=icon]:px-[9px]">
+      {collapsed ? (
+        <button type="button" onClick={toggleSidebar} aria-label="Expand the sidebar"
+                className={cn("shrink-0 overflow-hidden rounded-md transition-[width] outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring", EASE)}
+                style={{ width: h + 1, height: h }}>
+          <LogoMark className="block max-w-none" style={{ height: h }} />
+        </button>
+      ) : (
+        <Link href={home} aria-label="Lanka Link home" className={cn("shrink-0 overflow-hidden transition-[width]", EASE)}
+              style={{ width: Math.ceil(h * LOGO_RATIO) + 1, height: h }}>
+          <LogoMark className="block max-w-none" style={{ height: h }} />
+        </Link>
+      )}
+      <SidebarTrigger className={cn("ml-auto shrink-0 transition-[opacity,width]", EASE,
+        "group-data-[collapsible=icon]:pointer-events-none group-data-[collapsible=icon]:w-0 group-data-[collapsible=icon]:opacity-0")} />
+    </SidebarHeader>
+  );
+}
 
 /** Cmd/Ctrl+K: jump to a case by reference or summary. */
 function JumpToCase() {
@@ -111,24 +161,24 @@ export function StaffShell({ children, bar }: { children: ReactNode; bar?: React
 
   return (
     <SidebarProvider>
-      <Sidebar>
-        <SidebarHeader className="px-4 py-3">
-          <Brand href={role === "operator" ? "/sim" : role === "admin" ? "/admin" : "/console"} />
-        </SidebarHeader>
+      <Sidebar collapsible="icon">
+        {/* The fold control lives in the sidebar's own corner, and stays reachable when collapsed. */}
+        <SidebarBrand home={role === "operator" ? "/sim" : role === "admin" ? "/admin" : "/console"} />
         <SidebarContent>
           {GROUPS.filter((g) => g.roles.includes(role)).map((g) => (
             <SidebarGroup key={g.label}>
               <SidebarGroupLabel>{g.label}</SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu>
-                  {g.items.map((item) => {
-                    const root = ["/console", "/admin", "/sim"].includes(item.href);
-                    const active = root ? path === item.href || (item.href === "/console" && path.startsWith("/console/"))
-                      : path.startsWith(item.href);
+                  {g.items.map(({ href, label, icon: Icon }) => {
+                    const active = ROOTS.includes(href)
+                      ? path === href || (href === "/console" && path.startsWith("/console/"))
+                      : path.startsWith(href);
                     return (
-                      <SidebarMenuItem key={item.href}>
-                        <SidebarMenuButton isActive={active} render={<Link href={item.href} />}>
-                          {item.label}
+                      <SidebarMenuItem key={href}>
+                        <SidebarMenuButton isActive={active} tooltip={label} render={<Link href={href} />}>
+                          <Icon />
+                          <span className="whitespace-nowrap transition-opacity duration-300 group-data-[collapsible=icon]:opacity-0">{label}</span>
                         </SidebarMenuButton>
                       </SidebarMenuItem>
                     );
@@ -138,21 +188,34 @@ export function StaffShell({ children, bar }: { children: ReactNode; bar?: React
             </SidebarGroup>
           ))}
         </SidebarContent>
-        <SidebarFooter className="gap-1 px-4 pb-4 text-sm">
-          <span className="truncate">{data?.user.name}</span>
-          <span className="text-xs capitalize text-muted-foreground">{role}</span>
-          <Button variant="ghost" size="sm" className="justify-start px-0" onClick={async () => {
-            await signOut();
-            forgetToken();
-            router.replace("/sign-in");
-          }}>
-            Sign out
-          </Button>
+        <SidebarFooter className="px-3 pb-4 text-sm">
+          <div className="min-w-0 max-h-12 overflow-hidden whitespace-nowrap transition-[max-height,opacity] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] group-data-[collapsible=icon]:max-h-0 group-data-[collapsible=icon]:opacity-0">
+            <p className="truncate font-medium">{data?.user.name}</p>
+            <p className="text-xs capitalize text-muted-foreground">{role}</p>
+          </div>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton tooltip="Lanka Link website" render={<Link href="/" />}>
+                <GlobeIcon />
+                <span className="whitespace-nowrap transition-opacity duration-300 group-data-[collapsible=icon]:opacity-0">Website</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton tooltip="Sign out" onClick={async () => {
+                await signOut();
+                forgetToken();
+                router.replace("/sign-in");
+              }}>
+                <LogOutIcon />
+                <span className="whitespace-nowrap transition-opacity duration-300 group-data-[collapsible=icon]:opacity-0">Sign out</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
         </SidebarFooter>
       </Sidebar>
-      <SidebarInset className="text-sm">
-        <header className="sticky top-0 z-10 flex h-12 items-center gap-3 border-b bg-background/95 px-4 backdrop-blur">
-          <SidebarTrigger />
+      <SidebarInset className="!bg-transparent text-sm">
+        <header className="sticky top-0 z-10 flex h-12 items-center gap-3 border-b bg-background/80 px-4 backdrop-blur">
+          <SidebarTrigger className="md:hidden" />
           {bar}
           <span className="ml-auto hidden text-xs text-muted-foreground sm:inline">Ctrl K to find a case</span>
         </header>
