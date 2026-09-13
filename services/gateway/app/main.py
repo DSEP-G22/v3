@@ -10,6 +10,7 @@ import asyncio
 import json
 import os
 from collections.abc import AsyncIterator
+from datetime import date
 from typing import Annotated, Any, Literal
 
 import httpx
@@ -201,6 +202,13 @@ class OrderIn(BaseModel):
     city: str | None = None
     address_line: str = Field(default="", max_length=160)
     language: Literal["en", "si", "ta"] = "en"
+    # Where and when to install, for a new service.
+    landmark: str = Field(default="", max_length=120)
+    phone: str = Field(default="", max_length=20, pattern=r"^[0-9+ ]*$")
+    lat: float | None = Field(default=None, ge=-90, le=90)
+    lng: float | None = Field(default=None, ge=-180, le=180)
+    install_date: date | None = None
+    install_slot: Literal["", "morning", "afternoon", "evening"] = ""
 
 
 @app.post("/api/app/orders", status_code=201)
@@ -208,7 +216,7 @@ async def create_order(body: OrderIn, p: Principal) -> Any:
     if p.get("role") != "customer":
         raise HTTPException(403, "Only customers can place orders.")
     order = await _upstream("POST", f"{BUSINESS_URL}/orders", json={
-        **body.model_dump(), "user_id": p["sub"], "email": p.get("email") or "", "full_name": p.get("name") or "",
+        **body.model_dump(mode="json"), "user_id": p["sub"], "email": p.get("email") or "", "full_name": p.get("name") or "",
     })
     return order
 

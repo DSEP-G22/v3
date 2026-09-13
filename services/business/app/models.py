@@ -550,6 +550,20 @@ class Order(OrgBase):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
+class OrderSite(OrgBase):
+    """Where and when to install a new service: what the installer needs beyond the address line."""
+
+    __tablename__ = "order_site"
+
+    order_id: Mapped[str] = mapped_column(ForeignKey("order.id"), primary_key=True)
+    landmark: Mapped[str] = mapped_column(String, default="")
+    phone: Mapped[str] = mapped_column(String, default="")
+    lat: Mapped[float | None] = mapped_column(Float, nullable=True)
+    lng: Mapped[float | None] = mapped_column(Float, nullable=True)
+    install_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    install_slot: Mapped[str] = mapped_column(String, default="")  # morning|afternoon|evening
+
+
 class SimClock(OrgBase):
     """Single row. sim_now = anchor_sim + (wall - anchor_wall) * speed.
 

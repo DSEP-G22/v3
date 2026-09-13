@@ -11,7 +11,7 @@ import json
 import os
 import secrets
 from collections.abc import AsyncIterator
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any, Literal
 
 import httpx
@@ -206,6 +206,12 @@ class NewOrder(BaseModel):
     language: Literal["en", "si", "ta"] = "en"
     city: str | None = None
     address_line: str = Field(default="", max_length=160)
+    landmark: str = Field(default="", max_length=120)
+    phone: str = Field(default="", max_length=20)
+    lat: float | None = None
+    lng: float | None = None
+    install_date: date | None = None
+    install_slot: str = Field(default="", max_length=20)
 
 
 @app.post("/orders", status_code=201)
@@ -237,6 +243,12 @@ async def create_order(body: NewOrder) -> dict[str, Any]:
         order_id, body.user_id, body.kind, plan.code, body.full_name, body.email, body.language,
         body.address_line, district, body.city, exchange_code, subscriber_id, amount, datetime.now(timezone.utc),
     )
+    if body.kind == "new_service":
+        await db.neon.execute(
+            """INSERT INTO org.order_site (order_id, landmark, phone, lat, lng, install_date, install_slot)
+               VALUES ($1,$2,$3,$4,$5,$6,$7)""",
+            order_id, body.landmark, body.phone, body.lat, body.lng, body.install_date, body.install_slot,
+        )
     r = await http.post(f"{PAYMENTS_URL}/intents", json={
         "user_id": body.user_id,
         "purpose": "subscription" if body.kind == "new_service" else "plan_change",

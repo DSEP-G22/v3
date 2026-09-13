@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRightIcon, CreditCardIcon, GaugeIcon, SparklesIcon, TicketIcon, WifiIcon } from "lucide-react";
+import { ArrowRightIcon, CreditCardIcon, GaugeIcon, InfinityIcon, SparklesIcon, TicketIcon, WifiIcon } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -47,14 +47,23 @@ function greeting() {
   return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
 }
 
-/** The service card is washed in the state's colour: the card itself is the status. */
+const TONE_TEXT: Record<string, string> = {
+  up: "text-success", busy: "text-warning", shaped: "text-warning", setting_up: "text-info",
+  outage: "text-destructive", down: "text-destructive", suspended: "text-destructive",
+};
+
+/**
+ * The service card is washed in the state's colour over a neutral ground, so it reads plainly
+ * green or red (amber, blue) with no violet in it: the card itself is the status.
+ */
 function tint(state: string): React.CSSProperties {
   const c = `var(${SPHERE[state] ?? "--muted-foreground"})`;
   return {
-    background: `radial-gradient(120% 110% at 0% 0%, color-mix(in oklch, ${c} 30%, transparent), transparent 60%),
-      linear-gradient(160deg, color-mix(in oklch, ${c} 16%, var(--card)), var(--card) 50%, color-mix(in oklch, var(--card) 70%, black 30%))`,
-    borderColor: `color-mix(in oklch, ${c} 35%, transparent)`,
-  };
+    background: `radial-gradient(120% 110% at 0% 0%, color-mix(in oklch, ${c} 34%, transparent), transparent 62%),
+      linear-gradient(160deg, color-mix(in oklch, ${c} 22%, oklch(0.2 0 0)), color-mix(in oklch, ${c} 9%, oklch(0.15 0 0)) 55%, color-mix(in oklch, ${c} 5%, oklch(0.1 0 0)))`,
+    borderColor: `color-mix(in oklch, ${c} 45%, transparent)`,
+    "--tilt-glow": c,
+  } as React.CSSProperties;
 }
 
 function UsageRing({ fraction, unlimited }: { fraction: number; unlimited?: boolean }) {
@@ -69,7 +78,8 @@ function UsageRing({ fraction, unlimited }: { fraction: number; unlimited?: bool
                 strokeDasharray={`${(pct / 100) * 97.4} 97.4`} />
       </svg>
       <span className="absolute inset-0 grid place-items-center text-center">
-        <span className="text-xl font-semibold tabular-nums">{unlimited ? "∞" : `${pct}%`}</span>
+        {unlimited ? <InfinityIcon aria-label="Unlimited" className="size-9 text-primary" strokeWidth={1.75} />
+          : <span className="text-xl font-semibold tabular-nums">{pct}%</span>}
       </span>
     </div>
   );
