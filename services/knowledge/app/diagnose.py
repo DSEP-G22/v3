@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field
 
 from app.index import Graph, Index
 
-BUDGET_S = 2.5
+BUDGET_S = 12.0  # a cloud model answers in 2 to 10 s; the orchestrator allows 15
 MIN_CONFIDENCE = 0.55
 
 PROMPT = """You are a telecom customer-support fault-diagnosis assistant. You are given a customer ticket

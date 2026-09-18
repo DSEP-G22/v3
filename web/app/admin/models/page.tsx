@@ -70,6 +70,18 @@ function curve(a: ReturnType<typeof box>, b: ReturnType<typeof box>) {
   return `M ${x1} ${y1} C ${x1 + 40 * dir} ${y1}, ${x2 - 40 * dir} ${y2}, ${x2} ${y2}`;
 }
 
+/** Model ids each implementation accepts; the first is filled in when you switch to it. */
+const MODELS: Record<string, string[]> = {
+  ollama: ["gpt-oss:120b-cloud", "gpt-oss:20b-cloud"],
+  gemini: ["gemini-3.6-flash", "gemini-2.5-flash", "gemini-2.5-pro"],
+  stub: ["stub-generator-1"],
+  rules: ["rules"],
+  nllb: ["facebook/nllb-200-distilled-600M"],
+  google: ["google-translate"],
+  passthrough: ["none"],
+  whisper: ["faster-whisper-small-int8"],
+};
+
 const TONE = { active: "bg-success", inactive: "bg-destructive", off: "bg-muted-foreground/40", unknown: "bg-warning" } as const;
 const WORD = { active: "Active", inactive: "Not answering", off: "Not running", unknown: "Not verified" } as const;
 
@@ -126,11 +138,12 @@ export default function Models() {
     if (!edit) return;
     try {
       await api(`/admin/models/${r.role}`, { method: "PUT", body: JSON.stringify({ ...edit, params: {} }) });
-      toast.success("Switched. It takes effect on the next case, no restart.");
+      toast.success("Switched. It takes effect on the next case, no restart. Checking it now.");
       setEdit(null);
       setVerdicts((m) => { const n = { ...m }; delete n[sel!.id]; return n; });
-      void reload();
       void history.reload();
+      // Services rebind within a couple of seconds; then prove the new model actually answers.
+      setTimeout(() => { void verify(sel!.id).then(() => reload()); }, 2500);
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -250,14 +263,21 @@ export default function Models() {
               <FieldGroup>
                 <Field>
                   <FieldLabel>Implementation</FieldLabel>
-                  <Select value={edit.impl} onValueChange={(v) => setEdit({ ...edit, impl: String(v) })} items={bound.allowed.map((a) => ({ value: a, label: a }))}>
+                  <Select value={edit.impl} items={bound.allowed.map((a) => ({ value: a, label: a }))}
+                          onValueChange={(v) => {
+                            const impl = String(v);
+                            // A new implementation needs one of its own model ids, not the old one's.
+                            const model = impl === bound.impl ? bound.model_version : MODELS[impl]?.[0] ?? edit.model_version;
+                            setEdit({ ...edit, impl, model_version: model });
+                          }}>
                     <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                     <SelectContent>{bound.allowed.map((a) => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
                   </Select>
                 </Field>
                 <Field>
                   <FieldLabel htmlFor="mv">Model</FieldLabel>
-                  <Input id="mv" value={edit.model_version} onChange={(e) => setEdit({ ...edit, model_version: e.target.value })} />
+                  <Input id="mv" list="mv-options" value={edit.model_version} onChange={(e) => setEdit({ ...edit, model_version: e.target.value })} />
+                  <datalist id="mv-options">{(MODELS[edit.impl] ?? []).map((m) => <option key={m} value={m} />)}</datalist>
                 </Field>
                 <Field>
                   <FieldLabel htmlFor="why">Reason</FieldLabel>

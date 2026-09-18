@@ -278,6 +278,19 @@ async def verify(node: str) -> dict[str, Any]:
                            "detail": {k: cp.get(k) for k in ("band", "level", "score", "confidence", "model_version")}})
         except httpx.HTTPError as exc:
             checks.append({"check": "TriageModel prediction", "status": "down", "ms": None, "detail": {"error": str(exc)}})
+    if node in ("translate", "translate_out") and h["status"] == "up":
+        # A real sentence through the bound backend, both directions named by the admin's binding.
+        path, body = (("/run", {"text": "මගේ අන්තර්ජාලය වැඩ කරන්නේ නැහැ"}) if node == "translate"
+                      else ("/run_out", {"text": "Please restart your router.", "target": "si"}))
+        started = time.perf_counter()
+        try:
+            r = (await http.post(f"{SERVICE_URL['translation']}{path}", json=body, timeout=20)).json()
+            out = r.get("text_en") or r.get("text") or ""
+            checks.append({"check": "Translation", "status": "up" if out and out != body["text"] else "down",
+                           "ms": int((time.perf_counter() - started) * 1000),
+                           "detail": {"backend": r.get("backend"), "output": out[:80]}})
+        except httpx.HTTPError as exc:
+            checks.append({"check": "Translation", "status": "down", "ms": None, "detail": {"error": str(exc)}})
     if role and role.startswith("llm_"):
         p = await _upstream("POST", f"{CONTROL_URL}/bindings/{role}/probe", params={"deep": "true"}, timeout=60)
         checks.append({"check": f"{role} generation", "status": "up" if p["status"] == "reachable" else "down",

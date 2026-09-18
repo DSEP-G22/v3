@@ -16,7 +16,7 @@ Build plan: [PLAN.md](PLAN.md). Full feature guide: **http://localhost:8080/docs
 ```bash
 cp .env.example .env        # NEON_KEY, BETTER_AUTH_SECRET (openssl rand -base64 32), optional keys
 scripts/up.sh               # or scripts\up.ps1: the full stack
-# On a laptop without much RAM: everything except translation, speech and photo analysis
+# Same stack, same command as before: every stage, translation and speech included (about 4 GB RAM)
 docker compose -f compose.yaml -f compose.lite.yaml up -d --wait
 ```
 
@@ -25,7 +25,7 @@ Seeded logins (passwords from `SEED_*_PASSWORD` in `.env`):
 - Customers: `amara`, `ravi`, `nadia`, `dinesh`, `priya`, `kavindu`, `thilini`, `rizwan` `@customers.lankalink.example.lk`
 
 Profiles:
-- **Lite**: `-f compose.lite.yaml`, no media models, replies in English.
+- **Lite**: `-f compose.lite.yaml`, now identical to the full stack (kept so the command still works).
 - **GPU**: `-f compose.gpu.yaml`, local Ollama, CUDA whisper and NLLB.
 - **CI**: `-f compose.ci.yaml`, no model images and the offline stub LLM.
 - **MLOps**: `--profile mlops`, MLflow on :5000 and Airflow on :8081 (see [ml/README.md](ml/README.md)).

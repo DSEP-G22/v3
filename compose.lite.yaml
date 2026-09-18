@@ -1,24 +1,5 @@
 # Laptop profile: docker compose -f compose.yaml -f compose.lite.yaml up -d --wait
-# Everything except translation and speech, which need several GB of RAM between them. Those
-# stages fall back to the orchestrator's stubs: text is read as written, Singlish and Tanglish
-# are still recognised, and the drafting LLM translates the reply. Photo analysis (a small
-# ONNX model), diagnosis, the TriageModel and the real LLM bindings all stay on.
-services:
-  translation: { profiles: [media] }
-  audio: { profiles: [media] }
-
-  orchestrator:
-    environment:
-      TRANSLATE_URL: ""
-      ASR_URL: ""
-    depends_on: !override
-      inquiry: { condition: service_healthy }
-      business: { condition: service_healthy }
-      triage: { condition: service_healthy }
-      knowledge: { condition: service_healthy }
-      image: { condition: service_healthy }
-      grounding: { condition: service_healthy }
-      response: { condition: service_healthy }
-
-  response:
-    environment: { TRANSLATE_URL: "" }
+# Every stage runs, translation and speech included: the whole stack needs about 4 GB of RAM.
+# Kept so the documented command keeps working; it no longer switches anything off. (Capping
+# speech to two CPUs made a 20 second voice note take 20 seconds to transcribe instead of 4.)
+services: {}

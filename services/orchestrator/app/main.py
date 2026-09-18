@@ -40,7 +40,7 @@ PREFETCH_TOOLS = [
     "get_planned_work_for", "get_open_work_orders", "get_next_appointment_slots", "get_prior_tickets",
     "get_sla_position",
 ]
-BUDGET_S = {"translate": 3.0, "asr": 6.0, "vision": 4.0, "prefetch": 4.0, "triage": 1.0, "diagnose": 3.0,
+BUDGET_S = {"translate": 10.0, "asr": 30.0, "vision": 6.0, "prefetch": 6.0, "triage": 2.0, "diagnose": 15.0,
             "grounding": 2.0, "response": 60.0}
 #: What the customer sees for each stage. Never the stage name itself.
 CHIP = {"translate": "reading", "asr": "reading", "vision": "reading", "prefetch": "checking",

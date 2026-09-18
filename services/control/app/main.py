@@ -7,6 +7,7 @@ five seconds (v2 registry.py:142). A binding is a row: a swap takes effect witho
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import json
 import os
@@ -115,7 +116,10 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     await rt.pool.execute(DDL)
     await _seed()
     rt.nc, rt.js = await bus.connect()
+    # Refresh the model page's status: a probe from before a restart (Ollama off, say) is stale.
+    reprobe = asyncio.ensure_future(asyncio.gather(*(probe(r) for r in ROLES if r.startswith("llm_")), return_exceptions=True))
     yield
+    reprobe.cancel()
     await rt.nc.drain()
     await rt.pool.close()
 
@@ -169,7 +173,17 @@ async def rebind(role: str, b: Rebind) -> dict[str, Any]:
     if b.impl not in ROLES[role][2]:
         raise HTTPException(422, f"{role} accepts {', '.join(ROLES[role][2])}.")
     async with rt.pool.acquire() as conn, conn.transaction():
-        before = await conn.fetchrow("SELECT impl, model_version FROM control.model_binding WHERE role = $1", role)
+        before = await conn.fetchrow("SELECT impl, model_version, params FROM control.model_binding WHERE role = $1", role)
+        if not b.params:
+            # A switch from the admin page sends no params: keep the role's own (the draft's Gemini
+            # fallback, diagnosis thinking level) rather than wiping them.
+            kept = json.loads(before["params"]) if isinstance(before["params"], str) else dict(before["params"] or {})
+            defaults = dict(ROLES[role][5])
+            b.params = {**defaults, **kept}
+            if b.impl != "ollama":
+                b.params.pop("think", None)
+            if (b.params.get("fallback") or {}).get("impl") == b.impl:
+                b.params.pop("fallback", None)  # a fallback to itself is no fallback
         row = await conn.fetchrow(
             """UPDATE control.model_binding SET impl = $2, model_version = $3, params = $4, generation = generation + 1,
                    updated_by = $5, updated_at = now(), probe_status = 'unknown', probe_detail = 'not probed since the change'
@@ -185,7 +199,6 @@ async def rebind(role: str, b: Rebind) -> dict[str, Any]:
 @app.post("/bindings/{role}/probe")
 async def probe(role: str, deep: bool = False) -> dict[str, Any]:
     """ping() checks the endpoint knows the model; deep=true makes it actually generate."""
-    import asyncio
 
     b = await binding(role)
     started = time.perf_counter()

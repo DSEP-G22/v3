@@ -119,6 +119,9 @@ class Ollama:
 
     async def generate_json(self, prompt: str, schema: type[BaseModel], system: str | None = None) -> BaseModel:
         self._breaker.check()
+        # Cloud models ignore `format`, so the schema also goes in the instructions.
+        instruction = f"Reply with JSON only, matching this schema:\n{json.dumps(schema.model_json_schema())}"
+        system = f"{system}\n\n{instruction}" if system else instruction
         async with self._sem:
             try:
                 r = await self._http.post(f"{self.base_url}/api/chat",

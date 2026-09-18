@@ -192,7 +192,7 @@ cd ml && dvc repro                        # the same pipeline by hand`}</Code>
           <Section id="running" title="Running it">
             <Code>{`cp .env.example .env              # NEON_KEY, BETTER_AUTH_SECRET, optional keys
 docker compose up -d --wait        # everything
-docker compose -f compose.yaml -f compose.lite.yaml up -d --wait   # without the heavy media models
+docker compose -f compose.yaml -f compose.lite.yaml up -d --wait   # every stage, translation and speech included
 uv run python scripts/demo_flow.py # the headline case end to end`}</Code>
             <p>
               Seeded logins: <strong>agent1</strong>, <strong>lead1</strong>, <strong>admin1</strong> and
