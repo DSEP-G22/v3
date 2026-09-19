@@ -20,7 +20,7 @@
       block:
         - apt: { update_cache: true, cache_valid_time: 3600 }
         - apt:
-            name: [ca-certificates, curl, git, python3-docker]
+            name: [ca-certificates, curl, git]
             state: present
         - file: { path: /etc/apt/keyrings, state: directory, mode: "0755" }
         - get_url:
