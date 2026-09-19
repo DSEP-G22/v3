@@ -70,7 +70,7 @@ class Runtime:
 
 
 rt = Runtime()
-http = httpx.AsyncClient(timeout=30)
+http = httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=3.0), limits=httpx.Limits(max_keepalive_connections=10, keepalive_expiry=20.0))
 
 
 async def _bind() -> None:
@@ -132,11 +132,15 @@ async def generate_from_bundle(bundle: ContextBundle) -> AsyncIterator[str]:
         async for token in rt.llm.stream(prompt):
             produced = True
             yield token
-    except LLMUnavailable:
+    except LLMUnavailable as primary:
         if produced or rt.fallback is None:
             raise
-        async for token in rt.fallback.stream(prompt):
-            yield token
+        try:
+            async for token in rt.fallback.stream(prompt):
+                yield token
+        except LLMUnavailable as backup:
+            # Name both, so the agent sees why the main model failed, not only the backup.
+            raise LLMUnavailable(f"{primary}; fallback {backup}") from backup
 
 
 # -- the stage ------------------------------------------------------------------------------------

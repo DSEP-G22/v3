@@ -20,7 +20,7 @@ from lanka_common import bus
 from lanka_common.llm import LLMUnavailable, build
 
 CONTROL_URL = os.environ.get("CONTROL_URL", "http://control:8000")
-http = httpx.AsyncClient(timeout=5)
+http = httpx.AsyncClient(timeout=httpx.Timeout(5.0, connect=3.0), limits=httpx.Limits(max_keepalive_connections=10, keepalive_expiry=20.0))
 state: dict[str, Any] = {"llm": None, "binding": None}
 
 

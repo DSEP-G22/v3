@@ -3,7 +3,7 @@
 NEON_KEY may be a bare postgresql:// URL or the full `psql '...'` command Neon's console
 shows, possibly with the `NEON_KEY =` prefix still attached. asyncpg rejects
 `channel_binding`, so it is dropped. Services use the pooled host (PgBouncer transaction
-mode: statement caches off); migrations use the direct host (`-pooler` stripped).
+mode: see POOLER_KWARGS); migrations use the direct host (`-pooler` stripped).
 """
 
 from __future__ import annotations
@@ -11,6 +11,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
+import asyncpg
 
 _URL = re.compile(r"postgres(?:ql)?://[^\s'\"]+")
 
@@ -37,5 +39,16 @@ def parse_neon_key(raw: str) -> NeonDsn:
     return NeonDsn(urlunsplit(pooled), urlunsplit(direct))
 
 
-# asyncpg.create_pool / connect kwargs required behind the Neon pooler.
-POOLER_KWARGS = {"statement_cache_size": 0}
+class PooledConnection(asyncpg.Connection):
+    """Behind PgBouncer in transaction mode a connection carries no session state between
+    transactions, so asyncpg's reset on every release (RESET ALL, UNLISTEN, advisory unlock)
+    is a wasted round trip. At ~320 ms to the database that was a quarter of every query."""
+
+    async def reset(self, *, timeout: float | None = None) -> None:
+        return None
+
+
+# asyncpg.create_pool kwargs for the Neon pooler. Neon's PgBouncer tracks protocol-level
+# prepared statements, so asyncpg's statement cache stays on: one round trip per query, not two.
+# Measured: 1.2 s -> 0.35 s for a one-row query.
+POOLER_KWARGS = {"connection_class": PooledConnection}

@@ -11,10 +11,19 @@ export const STAFF = {
 export const persona = (name: string) => `${name}@customers.lankalink.example.lk`;
 
 export async function signIn(page: Page, email: string) {
-  await page.goto("/sign-in");
-  await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill(email.includes("@customers.") ? CUSTOMER_PASSWORD : STAFF_PASSWORD);
-  await page.getByRole("button", { name: "Sign in" }).click();
+  // Sign-in is rate limited per address. A parallel test run trips it, so back off and retry.
+  for (let attempt = 0; attempt < 4; attempt++) {
+    await page.goto("/sign-in");
+    await page.getByLabel("Email").fill(email);
+    await page.getByLabel("Password").fill(email.includes("@customers.") ? CUSTOMER_PASSWORD : STAFF_PASSWORD);
+    await page.getByRole("button", { name: "Sign in" }).click();
+    try {
+      await expect(page).not.toHaveURL(/sign-in/, { timeout: 10_000 });
+      return;
+    } catch {
+      await page.waitForTimeout(3_000 * (attempt + 1));
+    }
+  }
   await expect(page).not.toHaveURL(/sign-in/);
 }
 

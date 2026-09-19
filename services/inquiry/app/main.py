@@ -369,6 +369,26 @@ async def case_messages(case_id: str) -> dict[str, Any]:
     return {"messages": [dict(r) for r in rows]}
 
 
+@app.get("/internal/cases/{case_id}/replay")
+async def replay(case_id: str) -> dict[str, Any]:
+    """The inquiry.received event for the case's latest customer message, rebuilt so the
+    orchestrator can run the pipeline again (a staff member corrected the language, say)."""
+    m = await rt.pool.fetchrow(
+        """SELECT m.*, c.user_id, c.subscriber_id, c.origin FROM inquiry.message m
+           JOIN inquiry.conversation c ON c.id = m.conversation_id
+           WHERE m.case_id = $1 AND m.author_kind = 'customer' ORDER BY m.created_at DESC LIMIT 1""", case_id)
+    if m is None:
+        raise HTTPException(404, "That case has no customer message.")
+    atts = await rt.pool.fetch(
+        "SELECT id, kind, object_key, mime, duration_s FROM inquiry.attachment WHERE message_id = $1", m["id"])
+    return {
+        "conversation_id": m["conversation_id"], "message_id": m["id"], "user_id": m["user_id"],
+        "subscriber_id": m["subscriber_id"], "origin": m["origin"], "open_case_id": case_id, "text": m["body"],
+        "language_hint": m["lang"], "flags": list(m["flags"] or []), "attachments": [dict(a) for a in atts],
+        "received_at": m["created_at"].isoformat(),
+    }
+
+
 @app.get("/conversations/{conversation_id}")
 async def conversation(conversation_id: str) -> dict[str, Any]:
     """Staff and simulation view (the gateway restricts who may call this)."""

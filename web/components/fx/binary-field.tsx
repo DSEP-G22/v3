@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 
 const CELL = 18;
+const PARALLAX = 0.5;
 
 /**
  * A field of 1s and 0s that keep flipping, seen through a slowly moving alpha map: a few soft
@@ -27,21 +28,26 @@ export function BinaryField() {
     let bits = new Uint8Array(0);
     const m = { x: -9999, y: -9999, energy: 0 };
 
-    function frame(t: number) {
+    function frame(t: number, flip = true) {
       const s = t / 1000;
       const big = Math.max(w, h);
-      // Three pools of visibility on slow Lissajous paths: the alpha map.
+      // The field travels with the page at half speed (parallax), rather than sitting still.
+      const scroll = scrollY * PARALLAX;
+      const shift = Math.floor(scroll / CELL);
+      const frac = scroll - shift * CELL;
+      // Three pools of visibility on slow Lissajous paths: the alpha map. They ride the scroll too.
       const pools = [
-        [w * (0.5 + 0.35 * Math.sin(s * 0.07)), h * (0.35 + 0.25 * Math.cos(s * 0.05)), big * 0.32],
-        [w * (0.5 + 0.4 * Math.cos(s * 0.045 + 1)), h * (0.6 + 0.3 * Math.sin(s * 0.06 + 2)), big * 0.26],
-        [w * (0.5 + 0.3 * Math.sin(s * 0.03 + 4)), h * (0.5 + 0.35 * Math.cos(s * 0.04 + 3)), big * 0.22],
-      ];
+        [w * (0.5 + 0.35 * Math.sin(s * 0.07)), h * (0.35 + 0.25 * Math.cos(s * 0.05)) - scroll, big * 0.32],
+        [w * (0.5 + 0.4 * Math.cos(s * 0.045 + 1)), h * (0.6 + 0.3 * Math.sin(s * 0.06 + 2)) - scroll + h, big * 0.26],
+        [w * (0.5 + 0.3 * Math.sin(s * 0.03 + 4)), h * (0.5 + 0.35 * Math.cos(s * 0.04 + 3)) - scroll + 2 * h, big * 0.22],
+      ].map(([x, y, r]) => [x, ((y % (3 * h)) + 3 * h) % (3 * h) - h / 2, r]); // wrap so a pool is always near
       m.energy *= 0.95;
       const mr = 240;
-      if (!still) for (let i = 0; i < bits.length / 90; i++) bits[(Math.random() * bits.length) | 0] ^= 1;
+      if (flip && !still) for (let i = 0; i < bits.length / 90; i++) bits[(Math.random() * bits.length) | 0] ^= 1;
       ctx.clearRect(0, 0, w, h);
-      for (let r = 0; r < rows; r++) {
-        const y = r * CELL + CELL / 2;
+      for (let r = 0; r <= rows; r++) {
+        const y = r * CELL + CELL / 2 - frac;
+        const row = ((r + shift) % rows + rows) % rows; // the digits scroll, not just the pools
         for (let q = 0; q < cols; q++) {
           const x = q * CELL + CELL / 2;
           let a = 0;
@@ -53,11 +59,11 @@ export function BinaryField() {
           const md = ((x - m.x) ** 2 + (y - m.y) ** 2) / (mr * mr);
           if (md < 1) {
             a += (1 - md) * (0.05 + 0.25 * m.energy);
-            if (md < 0.3 && Math.random() < 0.15 * m.energy) bits[r * cols + q] ^= 1;
+            if (md < 0.3 && Math.random() < 0.15 * m.energy) bits[row * cols + q] ^= 1;
           }
           if (a < 0.02) continue;
           ctx.globalAlpha = Math.min(0.6, a);
-          ctx.fillText(bits[r * cols + q] ? "1" : "0", x, y);
+          ctx.fillText(bits[row * cols + q] ? "1" : "0", x, y);
         }
       }
     }
@@ -89,21 +95,30 @@ export function BinaryField() {
 
     let raf = 0;
     let last = 0;
+    let lastY = scrollY;
     const loop = (t: number) => {
       raf = requestAnimationFrame(loop);
-      if (t - last < 50) return; // about 20 frames a second is plenty for drifting digits
-      last = t;
-      frame(t);
+      // About 20 frames a second is plenty for drifting digits; while the page scrolls, every
+      // frame, so the parallax stays smooth. Digits only flip on the slow clock.
+      const moved = scrollY !== lastY;
+      const tick = t - last >= 50;
+      if (!moved && !tick) return;
+      if (tick) last = t;
+      lastY = scrollY;
+      frame(t, tick);
     };
+    const onScroll = () => frame(0, false); // reduced motion: follow the scroll, nothing else moves
 
     resize();
     addEventListener("resize", resize);
     addEventListener("pointermove", move, { passive: true });
     if (!still) raf = requestAnimationFrame(loop);
+    else addEventListener("scroll", onScroll, { passive: true });
     return () => {
       cancelAnimationFrame(raf);
       removeEventListener("resize", resize);
       removeEventListener("pointermove", move);
+      removeEventListener("scroll", onScroll);
     };
   }, []);
 

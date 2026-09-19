@@ -62,15 +62,15 @@ async def queue(tab: str = "needs_approval", q: str = "") -> dict[str, Any]:
 async def case(case_id: str) -> dict[str, Any]:
     detail = await _upstream("GET", f"{ORCHESTRATOR_URL}/cases/{case_id}")
     c = detail["case"]
-    conversation, drafts, found, bundle = await asyncio.gather(
+    conversation, drafts, found, bundle, names = await asyncio.gather(
         _upstream("GET", f"{INQUIRY_URL}/conversations/{c['conversation_id']}"),
         _upstream("GET", f"{RESPONSE_URL}/drafts/{case_id}"),
         _upstream("GET", f"{GROUNDING_URL}/bundles/{case_id}/{c['revision']}/findings"),
         _upstream("GET", f"{GROUNDING_URL}/bundles/{case_id}/{c['revision']}"),
+        _upstream("GET", f"{BUSINESS_URL}/subscribers/names", params={"ids": c.get("subscriber_id") or ""}),
         return_exceptions=True,
     )
-    names = await _upstream("GET", f"{BUSINESS_URL}/subscribers/names", params={"ids": c.get("subscriber_id") or ""}) \
-        if c.get("subscriber_id") else {}
+    names = names if isinstance(names, dict) else {}
     return {
         **detail, "customer": names.get(c.get("subscriber_id") or "", "Unknown customer"),
         "conversation": conversation if not isinstance(conversation, Exception) else None,
@@ -114,6 +114,17 @@ async def send_back(case_id: str, body: SendBack, p: Principal) -> dict[str, Any
 @console.post("/cases/{case_id}/escalate")
 async def escalate(case_id: str, p: Principal) -> Any:
     return await _upstream("POST", f"{ORCHESTRATOR_URL}/cases/{case_id}/escalate", params={"actor": _actor(p)})
+
+
+class Language(BaseModel):
+    language: str
+
+
+@console.post("/cases/{case_id}/language")
+async def set_language(case_id: str, body: Language, p: Principal) -> Any:
+    """Staff correct the detected language; the whole pipeline re-runs with it as a new revision."""
+    return await _upstream("POST", f"{ORCHESTRATOR_URL}/cases/{case_id}/rerun",
+                           json={"language": body.language, "actor": _actor(p)})
 
 
 @console.get("/cases/{case_id}/preview")

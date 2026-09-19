@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { Brand } from "@/components/brand";
+import { SessionNav } from "@/components/session-nav";
 import { buttonVariants } from "@/components/ui/button";
 
 export function SiteHeader() {
@@ -15,12 +16,7 @@ export function SiteHeader() {
           <Link href="/docs" className={buttonVariants({ variant: "ghost", className: "hidden sm:inline-flex" })}>
             How it works
           </Link>
-          <Link href="/sign-in" className={buttonVariants({ variant: "ghost" })}>
-            Sign in
-          </Link>
-          <Link href="/sign-up" className={buttonVariants({ className: "shadow-md shadow-primary/25" })}>
-            Get started
-          </Link>
+          <SessionNav light={buttonVariants({ className: "shadow-md shadow-primary/25" })} dark={buttonVariants({ variant: "ghost" })} />
         </nav>
       </div>
     </header>

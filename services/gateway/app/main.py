@@ -34,7 +34,8 @@ LINK_TTL_S = 60
 
 STAFF = ("agent", "lead", "admin", "operator")
 
-http = httpx.AsyncClient(timeout=15, limits=httpx.Limits(max_keepalive_connections=50))
+http = httpx.AsyncClient(timeout=httpx.Timeout(15.0, connect=3.0),
+                         limits=httpx.Limits(max_keepalive_connections=50, keepalive_expiry=20.0))
 cache = redis.from_url(os.environ.get("VALKEY_URL", "redis://valkey:6379/0"), decode_responses=True)
 
 

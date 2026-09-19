@@ -1,0 +1,24 @@
+# Production overlay: the edge terminates TLS on 80/443 for a real domain, nothing else is
+# published, and no service is ever built on the server (images come from GHCR).
+#   docker compose -f compose.yaml -f compose.prod.yaml pull
+#   docker compose -f compose.yaml -f compose.prod.yaml up -d --wait
+services:
+  edge:
+    ports: !override ["80:80", "443:443"]
+    environment:
+      SITE_DOMAIN: ${SITE_DOMAIN:?set SITE_DOMAIN to the host name this deployment answers on}
+      ACME_EMAIL: ${ACME_EMAIL:-admin@${SITE_DOMAIN}}
+    volumes: !override
+      - ./infra/caddy/Caddyfile.prod:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+  # The MinIO console and the Timescale port stay inside the compose network.
+  timescaledb:
+    ports: !override []
+  minio:
+    ports: !override []
+
+volumes:
+  caddy-data:
+  caddy-config:

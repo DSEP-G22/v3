@@ -16,7 +16,7 @@ from typing import Any
 
 import httpx
 import numpy as np
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
 
 from app.confidence import LOW_CONFIDENCE, weighted
@@ -26,7 +26,7 @@ INQUIRY_URL = os.environ.get("INQUIRY_URL", "http://inquiry:8000")
 TRANSLATE_URL = os.environ.get("TRANSLATE_URL", "http://translation:8000")
 MAX_SECONDS = 61.0
 
-http = httpx.AsyncClient(timeout=20)
+http = httpx.AsyncClient(timeout=httpx.Timeout(20.0, connect=3.0), limits=httpx.Limits(max_keepalive_connections=10, keepalive_expiry=20.0))
 model = None
 
 
@@ -61,7 +61,11 @@ class In(BaseModel):
 
 
 def _transcribe(data: bytes, hint: str | None) -> dict[str, Any]:
-    segments, info = model.transcribe(io.BytesIO(data), language=hint, vad_filter=True, beam_size=1,
+    """Whisper detects the language itself. Forcing it from the text's language is both wrong
+    when they differ (a Sinhala speaker typing English, say) and far slower: a 20 second English
+    note took 42 seconds forced to Sinhala against 5 seconds detected, which blew the budget and
+    lost every voice note. The hint is kept only to fill in when detection returns nothing."""
+    segments, info = model.transcribe(io.BytesIO(data), vad_filter=True, beam_size=1,
                                       condition_on_previous_text=False)
     if info.duration > MAX_SECONDS:
         return {"text": "", "language": info.language, "confidence": 0.0, "duration_s": info.duration,
@@ -69,20 +73,28 @@ def _transcribe(data: bytes, hint: str | None) -> dict[str, Any]:
     segs = list(segments)
     return {
         "text": normalise(" ".join(s.text.strip() for s in segs).strip()),
-        "language": hint or info.language,
+        "language": info.language or hint,
         "confidence": weighted([(s.start, s.end, s.avg_logprob) for s in segs]),
         "duration_s": round(info.duration, 2),
     }
 
 
+#: One transcription at a time. A thread cannot be cancelled, so a caller that gave up would
+#: otherwise leave its transcription running and every later voice note would crawl behind it.
+_one = asyncio.Semaphore(1)
+
+
 @app.post("/run")
-async def run(body: In) -> dict[str, Any]:
+async def run(body: In, request: Request) -> dict[str, Any]:
     started = time.perf_counter()
     r = await http.get(f"{INQUIRY_URL}/internal/attachments/{body.attachment['id']}/bytes")
     r.raise_for_status()
-    # Only a native-language hint helps; an "en" script hint from an empty text is noise.
+    # A fallback only: what the customer typed in, when the audio itself gives nothing away.
     hint = body.language_hint if body.language_hint in ("si", "ta") else None
-    out = await asyncio.to_thread(_transcribe, r.content, hint)
+    async with _one:
+        if await request.is_disconnected():
+            raise HTTPException(499, "The caller stopped waiting.")
+        out = await asyncio.to_thread(_transcribe, r.content, hint)
     out["low_confidence"] = out["confidence"] < LOW_CONFIDENCE
     out["text_en"] = out["text"]
     if out["text"] and out["language"] in ("si", "ta"):

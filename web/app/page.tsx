@@ -4,12 +4,13 @@ import Link from "next/link";
 import { BinaryField } from "@/components/fx/binary-field";
 import { LogoIcon, LogoMark } from "@/components/logo";
 import { PlanCard } from "@/components/plan-card";
+import { SessionNav } from "@/components/session-nav";
 import { getPlans } from "@/lib/server";
 import { cn } from "@/lib/utils";
 
 export const revalidate = 60;
 
-const NAV: [string, string][] = [["Plans", "/plans"], ["How it works", "/docs"], ["Sign in", "/sign-in"]];
+const NAV: [string, string][] = [["Plans", "/plans"], ["How it works", "/docs"]];
 const DOES = [
   { k: "Support", title: "Tickets in your language.", rest: "Type, send a photo of the router or leave a voice note, in Sinhala, Tamil or English." },
   { k: "Service", title: "Your line, in the open.", rest: "Repairs, maintenance and busy hours in your area appear on your account as they happen." },
@@ -56,10 +57,7 @@ export default async function Landing() {
           <nav aria-label="Site" className="hidden items-center gap-8 font-mono text-[11px] tracking-[0.12em] uppercase md:flex">
             {NAV.map(([label, href]) => <Link key={href} href={href} className="text-white/60 transition-colors hover:text-white">{label}</Link>)}
           </nav>
-          <div className="flex items-center gap-2">
-            <Link href="/sign-in" className={cn(DARK, "md:hidden")}>Sign in</Link>
-            <Link href="/sign-up" className={LIGHT}>Get started</Link>
-          </div>
+          <SessionNav light={LIGHT} dark={DARK} />
         </div>
       </header>
 

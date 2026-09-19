@@ -38,7 +38,7 @@ class State:
 
 
 state = State()
-http = httpx.AsyncClient(timeout=10)
+http = httpx.AsyncClient(timeout=httpx.Timeout(10.0, connect=3.0), limits=httpx.Limits(max_keepalive_connections=10, keepalive_expiry=20.0))
 
 
 async def _read_clock() -> ClockState:

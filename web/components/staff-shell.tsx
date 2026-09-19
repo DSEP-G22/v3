@@ -46,7 +46,7 @@ import {
   SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { api, forgetToken } from "@/lib/api";
+import { api, forgetToken, prefetch } from "@/lib/api";
 import { signOut, useSession } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 
@@ -75,6 +75,14 @@ const GROUPS: { label: string; roles: Role[]; items: NavItem[] }[] = [
   },
 ];
 const ROOTS = ["/console", "/admin", "/sim"];
+/** The data behind each section's pages, warmed after sign-in so moving between them is instant. */
+const WARM: Record<string, string[]> = {
+  Console: ["/console/cases?tab=needs_approval"],
+  Admin: ["/admin/overview", "/admin/autoreply", "/admin/models/map", "/admin/models/history", "/admin/grounding-plan",
+    "/admin/feedback", "/admin/traces?q="],
+  Simulation: ["/sim/network", "/sim/scenarios", "/sim/faults", "/sim/subscribers?q=&limit=100", "/sim/events?limit=200",
+    "/lab/runs", "/lab/requests?q="],
+};
 
 const EASE = "duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]";
 
@@ -158,6 +166,13 @@ export function StaffShell({ children, bar }: { children: ReactNode; bar?: React
   const router = useRouter();
   const { data } = useSession();
   const role = roleOf(data?.user);
+
+  useEffect(() => {
+    if (!data?.user) return;
+    const t = setTimeout(() => GROUPS.filter((g) => g.roles.includes(role)).flatMap((g) => WARM[g.label] ?? [])
+      .forEach(prefetch), 400); // after the current page's own requests
+    return () => clearTimeout(t);
+  }, [data?.user, role]);
 
   return (
     <SidebarProvider>

@@ -49,9 +49,33 @@ def _prepare(text: str) -> str:
     return _LKR.sub("Rs. ", text)
 
 
+#: NLLB drops the zero width joiner, so Sinhala conjuncts come back broken: "ප් රශ්නය" for
+#: "ප්‍රශ්නය", sometimes with a space and sometimes without. Joined back only where the
+#: join is certain, and only for the two forms it breaks, rakaransaya and yansaya.
+#:
+#: Without a space the text is already one word, so joining it cannot merge two.
+_SI_JOINED = re.compile(r"([ක-ෆ])්([රය])")
+#: Across a space, only when the letter before the virama is neither a vowel sign nor another
+#: consonant: what precedes the break is then a bare consonant or an anusvara, never a whole
+#: word. "නමුත් රේඛාව" and "රූපයක් රතුයි" are two words and stay two; "සංඛ් යාවක්" is one.
+_SI_SPACED = re.compile(r"(?<![්-ෟෲෳක-ෆ])([ක-ෆ])්\s+([රය])")
+#: And when what follows the break is a bare ර or ය: one letter with nothing attached to it is
+#: never a Sinhala word, so it can only be the second half of a conjunct ("සාමාන් ය").
+_SI_ORPHAN = re.compile(r"([ක-ෆ])්\s+([රය])(?![඀-෿])")
+
+
+def fix_sinhala(text: str) -> str:
+    out = _SI_ORPHAN.sub("\\1්‍\\2", _SI_SPACED.sub("\\1්‍\\2", text))
+    return _SI_JOINED.sub("\\1්‍\\2", out)
+
+
+#: "1." or "2)" opening a step. A step number is not a fact to guard: the model may move it.
+_LIST_MARKER = re.compile(r"(?m)^\s*\d{1,2}[.)]\s+")
+
+
 def _numbers(text: str) -> list[str]:
     """Every number as bare digits, so 7:30 and 7.30 or 1,758.20 and 1758.20 compare equal."""
-    return sorted(re.sub(r"\D", "", n) for n in _NUMBER.findall(text))
+    return sorted(re.sub(r"\D", "", n) for n in _NUMBER.findall(_LIST_MARKER.sub("", text)))
 
 
 def numbers_kept(source: str, translated: str) -> bool:
@@ -98,7 +122,8 @@ class CT2NLLBTranslator:
             tokens = r.hypotheses[0][1:]  # drop the forced target-language token
             decoded = self._tok.decode(self._tok.convert_tokens_to_ids(tokens), skip_special_tokens=True).strip()
             # A wrong amount or time is worse than an untranslated sentence: keep the source then.
-            out.append(decoded if numbers_kept(source, decoded) else source)
+            kept = decoded if numbers_kept(source, decoded) else source
+            out.append(fix_sinhala(kept) if target_language == LanguageCode.SI else kept)
         return TranslationResult(source_text=text, translated_text=" ".join(out).strip(),
                                  source_language=source_language, target_language=target_language, backend=self.name)
 

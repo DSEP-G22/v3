@@ -67,15 +67,26 @@ async def load_world() -> World:
     return world
 
 
+#: Identifier -> subscriber id. Found ids never change, so a hit saves a database round trip on
+#: every screen; misses are not kept (a new customer may appear a moment later).
+_ids: dict[str, str] = {}
+
+
 async def resolve_id(ref: str) -> str | None:
     """Subscriber id from any identifier: id, MSISDN, email or billing account."""
-    return await db.neon.fetchval(
+    key = (ref or "").strip()
+    if hit := _ids.get(key):
+        return hit
+    sid = await db.neon.fetchval(
         """SELECT s.id FROM org.subscriber s
            LEFT JOIN org.billing_account a ON a.subscriber_id = s.id
            WHERE s.id = $1 OR s.msisdn = $1 OR lower(s.email) = lower($1) OR a.id = $1
            LIMIT 1""",
-        (ref or "").strip(),
+        key,
     )
+    if sid and len(_ids) < 50_000:
+        _ids[key] = sid
+    return sid
 
 
 _ACCOUNT = "(SELECT id FROM org.billing_account WHERE subscriber_id = $1)"

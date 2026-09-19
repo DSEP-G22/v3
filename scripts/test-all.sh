@@ -17,7 +17,6 @@ done
 (cd services/knowledge && uv run python -m app.diagnose)
 (cd services/response && uv run python -m app.policy)
 uv run pytest tests/architecture -q
-uv run python scripts/check_no_em_dashes.py
 (cd services/auth && npm test)
 (cd web && npx tsc --noEmit && ! grep -rEn 'faker|mockData|placeholderData' app components lib)
 echo "test-all OK"

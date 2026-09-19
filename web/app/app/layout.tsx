@@ -3,13 +3,16 @@
 import { GlobeIcon, LogOutIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useEffect } from "react";
 
 import { Brand } from "@/components/brand";
 import { RoleGate } from "@/components/role-gate";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { forgetToken } from "@/lib/api";
+import { forgetToken, prefetch } from "@/lib/api";
 import { signOut } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
+
+const WARM = ["/app/overview", "/app/tickets", "/app/notices", "/app/billing", "/app/usage", "/app/plan"];
 
 type Item = { href: string; label: string; sub?: { href: string; label: string }[] };
 const NAV: Item[] = [
@@ -25,6 +28,11 @@ const NAV: Item[] = [
 export default function CustomerLayout({ children }: { children: React.ReactNode }) {
   const path = usePathname();
   const router = useRouter();
+  // Every tab's data, fetched once in the background: switching tabs then shows it at once.
+  useEffect(() => {
+    const t = setTimeout(() => WARM.forEach(prefetch), 300);
+    return () => clearTimeout(t);
+  }, []);
   return (
     <RoleGate roles={["customer"]}>
       <div className="flex min-h-svh flex-col text-[15px]">

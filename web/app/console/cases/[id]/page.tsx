@@ -60,7 +60,26 @@ export default function CasePage() {
   const [previewLang, setPreviewLang] = useState<string | null>(null);
   const [translating, setTranslating] = useState(false);
   const [busy, setBusy] = useState(false);
-  const held = data?.drafts.find((d) => d.status === "held");
+  const [lang, setLang] = useState<string | null>(null);
+  const [rerunning, setRerunning] = useState(false);
+  // Only this revision's draft: after a language re-run the old one no longer applies.
+  const held = data?.drafts.find((d) => d.status === "held" && d.revision === data.case.revision);
+
+  async function rerun() {
+    if (!lang) return;
+    setRerunning(true);
+    try {
+      await post(`/console/cases/${id}/language`, { language: lang });
+      toast.success(`Re-running in ${LANG_WORD[lang]}. The reply updates here as it is drafted.`);
+      setLive("");
+      setPreview(null);
+      await reload();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setRerunning(false);
+    }
+  }
 
   useEffect(() => {
     if (held) setText(held.text_en);
@@ -109,8 +128,24 @@ export default function CasePage() {
 
       <div className="grid gap-4 lg:grid-cols-[1fr_1.1fr]">
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
             <CardTitle>Conversation</CardTitle>
+            {/* The detected language can be wrong (Singlish read as English, say): correct it and re-run. */}
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-muted-foreground">Language</span>
+              <Select value={lang ?? c.language ?? "en"} onValueChange={(v) => setLang(String(v))}
+                      items={Object.entries(LANG_WORD).map(([value, label]) => ({ value, label }))}>
+                <SelectTrigger size="sm" className="w-32" aria-label="Customer's language"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {Object.entries(LANG_WORD).map(([v, label]) => (
+                    <SelectItem key={v} value={v}>{label}{v === c.language ? " (current)" : ""}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button size="sm" variant="outline" disabled={rerunning || !lang || lang === c.language} onClick={rerun}>
+                {rerunning ? "Re-running" : "Re-run translation"}
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="max-h-[70svh] space-y-3 overflow-y-auto">
             {messages.map((m) => (

@@ -14,7 +14,13 @@ if ((process.env.BETTER_AUTH_SECRET ?? "").length < 32) {
 export const pool = new pg.Pool({
   connectionString: parseNeonKey(process.env.NEON_KEY ?? "").pooled,
   max: 5,
+  // A dropped network used to leave dead sockets in the pool and every sign-in hung until a
+  // restart. Fail fast, keep sockets alive, and let idle ones go so they are reopened fresh.
+  connectionTimeoutMillis: 10_000,
+  idleTimeoutMillis: 30_000,
+  keepAlive: true,
 });
+pool.on("error", (err) => console.error("idle database connection dropped", err.message));
 
 let nats: Promise<NatsConnection> | undefined;
 async function publish(subject: string, body: unknown): Promise<void> {
@@ -43,6 +49,14 @@ export const auth = betterAuth({
   trustedOrigins: [BASE_URL],
   database: pool,
   emailAndPassword: { enabled: true, minPasswordLength: 8 },
+  session: {
+    // Stay signed in: 30 days, renewed on use once a day.
+    expiresIn: 60 * 60 * 24 * 30,
+    updateAge: 60 * 60 * 24,
+    // The session is also kept in a signed cookie for five minutes, so the check every page
+    // makes is answered without a database round trip (about a second to the database today).
+    cookieCache: { enabled: true, maxAge: 5 * 60 },
+  },
   socialProviders: social,
   user: {
     additionalFields: {

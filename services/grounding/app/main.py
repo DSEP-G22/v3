@@ -67,7 +67,7 @@ class Runtime:
 
 
 rt = Runtime()
-http = httpx.AsyncClient(timeout=5)
+http = httpx.AsyncClient(timeout=httpx.Timeout(5.0, connect=3.0), limits=httpx.Limits(max_keepalive_connections=10, keepalive_expiry=20.0))
 
 
 async def _reload_control() -> None:

@@ -82,6 +82,7 @@ async def health() -> dict[str, Any]:
 class In(BaseModel):
     text: str
     language_hint: str | None = None  # the customer's declared language, if they chose one
+    language_override: str | None = None  # set by staff: skip detection and trust this
 
 
 @app.post("/run")
@@ -91,6 +92,8 @@ async def run(body: In) -> dict[str, Any]:
     # Script hints from intake are "en" for all Latin text, so they are not a declaration.
     if declared in (LanguageCode.SI, LanguageCode.TA) and not any(0x0B80 <= ord(c) <= 0x0DFF for c in body.text):
         declared = None
+    if body.language_override in ("en", "si", "ta", "si-Latn", "ta-Latn"):
+        declared = parse(body.language_override)
     out = await asyncio.to_thread(_with_fallback, "mt_in", lambda s: s.normalize_text(body.text, declared))
     lang = out.detected_language
     return {

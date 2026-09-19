@@ -1,0 +1,69 @@
+# Continuous delivery. main is green, release builds the images, this rolls them onto the host.
+#
+# Nothing runs without the secrets below, so a fork and a pull request can never deploy:
+#   DEPLOY_SSH_KEY   private half of the EC2 key pair
+#   DEPLOY_HOST      the elastic IP or host name  (terraform output public_ip)
+#   SITE_DOMAIN      the name the certificate is issued for
+#   NEON_KEY, BETTER_AUTH_SECRET, TIMESCALE_PASSWORD, MINIO_ROOT_PASSWORD
+#   OLLAMA_API_KEY, GOOGLE_API_KEY, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET   (optional)
+name: deploy
+
+on:
+  workflow_run:
+    workflows: [release]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  ansible:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Stop early when the deployment is not configured
+        env: { HOST: "${{ secrets.DEPLOY_HOST }}" }
+        run: |
+          [ -n "$HOST" ] || { echo "No DEPLOY_HOST secret: nothing to deploy to."; exit 1; }
+
+      - run: pipx install --include-deps ansible-core
+
+      - name: The key Ansible connects with
+        env: { KEY: "${{ secrets.DEPLOY_SSH_KEY }}" }
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/deploy
+          chmod 600 ~/.ssh/deploy
+          ssh-keyscan -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Roll the new images onto the host
+        working-directory: infra/deploy/ansible
+        env:
+          ANSIBLE_HOST_KEY_CHECKING: "True"
+        run: |
+          printf '[lanka]\nlanka-prod ansible_host=%s ansible_user=ubuntu\n' "${{ secrets.DEPLOY_HOST }}" > inventory.ini
+          ansible-playbook -i inventory.ini deploy.yml \
+            --private-key ~/.ssh/deploy \
+            -e github_owner='${{ github.repository_owner }}' \
+            -e github_repo='${{ github.event.repository.name }}' \
+            -e ghcr_token='${{ secrets.GITHUB_TOKEN }}' \
+            -e v3_tag='sha-${{ github.sha }}' \
+            -e site_domain='${{ secrets.SITE_DOMAIN }}' \
+            -e acme_email='${{ secrets.ACME_EMAIL }}' \
+            -e neon_key='${{ secrets.NEON_KEY }}' \
+            -e better_auth_secret='${{ secrets.BETTER_AUTH_SECRET }}' \
+            -e timescale_password='${{ secrets.TIMESCALE_PASSWORD }}' \
+            -e minio_password='${{ secrets.MINIO_ROOT_PASSWORD }}' \
+            -e ollama_api_key='${{ secrets.OLLAMA_API_KEY }}' \
+            -e google_api_key='${{ secrets.GOOGLE_API_KEY }}' \
+            -e google_client_id='${{ secrets.GOOGLE_CLIENT_ID }}' \
+            -e google_client_secret='${{ secrets.GOOGLE_CLIENT_SECRET }}'
+
+      - name: Smoke test the deployment, and say so if it failed
+        run: BASE="https://${{ secrets.SITE_DOMAIN }}" bash scripts/smoke.sh

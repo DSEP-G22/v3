@@ -37,7 +37,7 @@ PART = {
 }
 MODEL_DIR = Path(os.environ.get("MODEL_DIR", "/models"))
 
-http = httpx.AsyncClient(timeout=10)
+http = httpx.AsyncClient(timeout=httpx.Timeout(10.0, connect=3.0), limits=httpx.Limits(max_keepalive_connections=10, keepalive_expiry=20.0))
 state: dict[str, Any] = {}
 
 

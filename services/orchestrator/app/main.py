@@ -25,6 +25,7 @@ from typing import Any
 import asyncpg
 import httpx
 from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
 
 from app.fusion import Part, fuse
 from lanka_common import bus, tracing
@@ -106,7 +107,10 @@ class Runtime:
 
 
 rt = Runtime()
-http = httpx.AsyncClient(timeout=30, limits=httpx.Limits(max_keepalive_connections=50))
+# A short connect timeout and short-lived idle connections: when a service is restarted, its old
+# address stops answering and a pooled connection to it would otherwise hang out the whole budget.
+http = httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=3.0),
+                         limits=httpx.Limits(max_keepalive_connections=50, keepalive_expiry=20.0))
 
 
 # -- plumbing -----------------------------------------------------------------------------------
@@ -228,10 +232,12 @@ async def _run(ev: dict[str, Any], case_id: str, rev: int) -> dict[str, Any]:
 
     audio = [a for a in ev["attachments"] if a["kind"] == "audio"]
     images = [a for a in ev["attachments"] if a["kind"] == "image"]
-    base = {"case_id": case_id, "revision": rev, "language_hint": ev["language_hint"]}
+    forced = ev.get("language_override")  # set by staff on a re-run; always wins over detection
+    hint = (forced.split("-")[0] if forced else None) or ev["language_hint"]
+    base = {"case_id": case_id, "revision": rev, "language_hint": hint}
 
-    translate_t = stage("translate", ev, case_id, rev, {**base, "text": joined},
-                        lambda: _translate_stub(joined, ev["language_hint"]))
+    translate_t = stage("translate", ev, case_id, rev, {**base, "text": joined, "language_override": forced},
+                        lambda: _translate_stub(joined, forced or ev["language_hint"]))
     asr_t = [stage("asr", ev, case_id, rev, {**base, "attachment": a},
                    lambda: asyncio.sleep(0, {"text": "", "confidence": 0.0, "language": ev["language_hint"]}))
              for a in audio]
@@ -254,7 +260,7 @@ async def _run(ev: dict[str, Any], case_id: str, rev: int) -> dict[str, Any]:
               for a, v in zip(images, visuals)]
     fused_text, provenance = fuse(parts)
     partial = translated is None or prefetched is None or any(m is None for m in media)
-    language = (translated or {}).get("language", ev["language_hint"])
+    language = forced or (translated or {}).get("language", ev["language_hint"])
     await rt.pool.execute(
         """INSERT INTO cases.payload (case_id, revision, fused_text, provenance, flags, partial, stages)
            VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (case_id, revision) DO NOTHING""",
@@ -287,7 +293,7 @@ async def _run(ev: dict[str, Any], case_id: str, rev: int) -> dict[str, Any]:
         "case_id": case_id, "revision": rev, "subscriber_id": ev["subscriber_id"],
         "payload": {
             "original_text": joined, "text_en": tr.get("text_en", joined), "language": language,
-            "reply_language": tr.get("reply_language", "en"), "native_text": tr.get("native_text"),
+            "reply_language": forced or tr.get("reply_language", "en"), "native_text": tr.get("native_text"),
             "fused_text": fused_text, "provenance": provenance, "flags": ev["flags"], "partial": partial,
             "opened_at": ev["received_at"],
         },
@@ -350,11 +356,14 @@ async def _on_inquiry(msg) -> None:
         "message_id": ev["message_id"],
     }).encode(), headers={"Nats-Msg-Id": f"{case_id}-{rev}-{kind}"})
     _record(case_id, rev, "intake", "done", detail_kind=kind)
+    _launch(ev, case_id, rev)
+    await msg.ack()
 
+
+def _launch(ev: dict[str, Any], case_id: str, rev: int) -> None:
     task = asyncio.create_task(run(ev, case_id, rev))
     rt.runs[case_id] = (rev, task, set())
     task.add_done_callback(lambda t, c=case_id, r=rev: rt.runs.pop(c, None) if rt.runs.get(c, (None,))[0] == r else None)
-    await msg.ack()
 
 
 async def _on_released(msg) -> None:
@@ -405,9 +414,12 @@ TABS = {
 @app.get("/cases")
 async def cases(tab: str = "open", origin: str = "customer", limit: int = 100, q: str = "") -> dict[str, Any]:
     where = TABS.get(tab, TABS["open"])
+    # A work queue is oldest first: the customer who has waited longest is served first. History
+    # is newest first, because otherwise the hundred row cap hides the case that just opened.
+    order = "opened_at DESC" if tab == "all" else "opened_at"
     rows = await rt.pool.fetch(
         f"""SELECT * FROM cases."case" WHERE origin = $1 AND {where} AND ($3 = '' OR id ILIKE $3 OR summary ILIKE $3)
-            ORDER BY closed_at IS NOT NULL, priority_level DESC NULLS LAST, opened_at LIMIT $2""",
+            ORDER BY closed_at IS NOT NULL, priority_level DESC NULLS LAST, {order} LIMIT $2""",
         origin, max(1, min(limit, 500)), f"%{q}%" if q else "",
     )
     counts = await rt.pool.fetchrow(
@@ -451,14 +463,48 @@ async def escalate(case_id: str, actor: str) -> dict[str, Any]:
 
 @app.get("/cases/{case_id}")
 async def case(case_id: str) -> dict[str, Any]:
-    row = await rt.pool.fetchrow('SELECT * FROM cases."case" WHERE id = $1', case_id)
+    # Three independent reads at once: one database round trip instead of three.
+    row, events, payload = await asyncio.gather(
+        rt.pool.fetchrow('SELECT * FROM cases."case" WHERE id = $1', case_id),
+        rt.pool.fetch("SELECT * FROM cases.stage_event WHERE case_id = $1 ORDER BY id", case_id),
+        rt.pool.fetchrow("SELECT * FROM cases.payload WHERE case_id = $1 ORDER BY revision DESC LIMIT 1", case_id),
+    )
     if row is None:
         raise HTTPException(404, "No such case.")
-    events = await rt.pool.fetch("SELECT * FROM cases.stage_event WHERE case_id = $1 ORDER BY id", case_id)
-    payload = await rt.pool.fetchrow(
-        "SELECT * FROM cases.payload WHERE case_id = $1 ORDER BY revision DESC LIMIT 1", case_id
-    )
     return {"case": _row(row), "stages": [_row(e) for e in events], "payload": _row(payload) if payload else None}
+
+
+#: Languages staff may set by hand: what the customer actually wrote in.
+LANGUAGES = ("en", "si", "ta", "si-Latn", "ta-Latn")
+
+
+class Rerun(BaseModel):
+    language: str
+    actor: str
+
+
+@app.post("/cases/{case_id}/rerun")
+async def rerun(case_id: str, body: Rerun) -> dict[str, Any]:
+    """Run the pipeline again on the latest customer message with the language staff chose:
+    translation, speech, triage and the draft all follow it, as a new revision of the case."""
+    if body.language not in LANGUAGES:
+        raise HTTPException(422, f"Choose one of {', '.join(LANGUAGES)}.")
+    row = await rt.pool.fetchrow('SELECT revision FROM cases."case" WHERE id = $1 AND closed_at IS NULL', case_id)
+    if row is None:
+        raise HTTPException(404, "That case is not open.")
+    r = await http.get(f"{INQUIRY_URL}/internal/cases/{case_id}/replay")
+    if r.status_code == 404:
+        raise HTTPException(404, "That case has no customer message to translate.")
+    r.raise_for_status()
+    ev = {**r.json(), "language_override": body.language}
+    rev = row["revision"] + 1
+    await rt.pool.execute('UPDATE cases."case" SET revision = $2, language = $3, updated_at = now() WHERE id = $1',
+                          case_id, rev, body.language)
+    if prev := rt.runs.get(case_id):
+        prev[1].cancel()
+    _record(case_id, rev, "language_set", "done", language=body.language, by=body.actor)
+    _launch(ev, case_id, rev)
+    return {"case_id": case_id, "revision": rev, "language": body.language}
 
 
 @app.post("/cases/{case_id}/close")

@@ -8,6 +8,7 @@ PASSWORD="${SEED_CUSTOMER_PASSWORD:-Lanka#2026}"
 if command -v k6 >/dev/null; then
   k6 run -e BASE="$BASE" -e EMAIL="$EMAIL" -e PASSWORD="$PASSWORD" load/ack.js
 else
-  docker run --rm -i --network host -v "$PWD/load:/load" grafana/k6 run \
+  # MSYS_NO_PATHCONV: Git Bash on Windows rewrites /load into a C:\ path before Docker sees it.
+  MSYS_NO_PATHCONV=1 docker run --rm -i --network host -v "$PWD/load:/load" grafana/k6 run \
     -e BASE="$BASE" -e EMAIL="$EMAIL" -e PASSWORD="$PASSWORD" /load/ack.js
 fi

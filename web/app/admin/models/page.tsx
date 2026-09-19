@@ -164,7 +164,7 @@ export default function Models() {
 
       {loading ? <Skeleton className="h-96 rounded-2xl" /> : (
         <div ref={frame} className="relative -mx-4 overflow-hidden md:-mx-6"
-             style={{ height: CONTENT_H * fit.scale, background: "radial-gradient(ellipse at 50% 45%, color-mix(in oklch, var(--primary) 14%, transparent), transparent 65%)" }}>
+             style={{ height: CONTENT_H * fit.scale, background: "radial-gradient(ellipse 62% 48% at 50% 45%, color-mix(in oklch, var(--primary) 14%, transparent), transparent 100%)" }}>
           <div className="relative origin-top-left" style={{ width: CONTENT_W, height: CONTENT_H, transform: `translateX(${fit.offset}px) scale(${fit.scale})` }}>
             <svg className="absolute inset-0 size-full" aria-hidden>
               {LINKS.map(([a, b], i) => {
