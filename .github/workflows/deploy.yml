@@ -1,11 +1,13 @@
-# Continuous delivery. main is green, release builds the images, this rolls them onto the host.
+# Continuous delivery. main is pushed, release builds the images, this rolls them onto the server.
 #
 # Nothing runs without the secrets below, so a fork and a pull request can never deploy:
-#   DEPLOY_SSH_KEY   private half of the EC2 key pair
-#   DEPLOY_HOST      the elastic IP or host name  (terraform output public_ip)
+#   DEPLOY_HOST      the server's IP or host name
+#   DEPLOY_USER      the SSH user (needs passwordless sudo)
+#   DEPLOY_SSH_KEY   private key the runner connects with; its public half is in authorized_keys
 #   SITE_DOMAIN      the name the certificate is issued for
 #   NEON_KEY, BETTER_AUTH_SECRET, TIMESCALE_PASSWORD, MINIO_ROOT_PASSWORD
-#   OLLAMA_API_KEY, GOOGLE_API_KEY, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET   (optional)
+#   GOOGLE_API_KEY, OLLAMA_API_KEY, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET,
+#   SEED_STAFF_PASSWORD, SEED_CUSTOMER_PASSWORD, ACME_EMAIL                  (optional)
 name: deploy
 
 on:
@@ -24,8 +26,12 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     environment: production
+    env:
+      # The commit release just built; release tags each image sha-<first 7 of the commit>.
+      SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
     steps:
       - uses: actions/checkout@v4
+        with: { ref: "${{ env.SHA }}" }
 
       - name: Stop early when the deployment is not configured
         env: { HOST: "${{ secrets.DEPLOY_HOST }}" }
@@ -42,28 +48,33 @@ jobs:
           chmod 600 ~/.ssh/deploy
           ssh-keyscan -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts
 
-      - name: Roll the new images onto the host
+      - name: Roll the new images onto the server
         working-directory: infra/deploy/ansible
+        # Secrets reach the template as environment variables, never on a command line: a value
+        # with a quote in it (a `psql '...'` Neon key) would break the command and show in `ps`.
         env:
           ANSIBLE_HOST_KEY_CHECKING: "True"
+          NEON_KEY: ${{ secrets.NEON_KEY }}
+          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+          TIMESCALE_PASSWORD: ${{ secrets.TIMESCALE_PASSWORD }}
+          MINIO_ROOT_PASSWORD: ${{ secrets.MINIO_ROOT_PASSWORD }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          SEED_STAFF_PASSWORD: ${{ secrets.SEED_STAFF_PASSWORD }}
+          SEED_CUSTOMER_PASSWORD: ${{ secrets.SEED_CUSTOMER_PASSWORD }}
+          ACME_EMAIL: ${{ secrets.ACME_EMAIL }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          printf '[lanka]\nlanka-prod ansible_host=%s ansible_user=ubuntu\n' "${{ secrets.DEPLOY_HOST }}" > inventory.ini
-          ansible-playbook -i inventory.ini deploy.yml \
-            --private-key ~/.ssh/deploy \
-            -e github_owner='${{ github.repository_owner }}' \
-            -e github_repo='${{ github.event.repository.name }}' \
-            -e ghcr_token='${{ secrets.GITHUB_TOKEN }}' \
-            -e v3_tag='sha-${{ github.sha }}' \
-            -e site_domain='${{ secrets.SITE_DOMAIN }}' \
-            -e acme_email='${{ secrets.ACME_EMAIL }}' \
-            -e neon_key='${{ secrets.NEON_KEY }}' \
-            -e better_auth_secret='${{ secrets.BETTER_AUTH_SECRET }}' \
-            -e timescale_password='${{ secrets.TIMESCALE_PASSWORD }}' \
-            -e minio_password='${{ secrets.MINIO_ROOT_PASSWORD }}' \
-            -e ollama_api_key='${{ secrets.OLLAMA_API_KEY }}' \
-            -e google_api_key='${{ secrets.GOOGLE_API_KEY }}' \
-            -e google_client_id='${{ secrets.GOOGLE_CLIENT_ID }}' \
-            -e google_client_secret='${{ secrets.GOOGLE_CLIENT_SECRET }}'
+          printf '[lanka]\nlanka-prod ansible_host=%s ansible_user=%s\n' \
+            "${{ secrets.DEPLOY_HOST }}" "${{ secrets.DEPLOY_USER }}" > inventory.ini
+          ansible-playbook -i inventory.ini deploy.yml --private-key ~/.ssh/deploy \
+            -e github_owner="${{ github.repository_owner }}" \
+            -e github_repo="${{ github.event.repository.name }}" \
+            -e deploy_branch="$SHA" \
+            -e v3_tag="sha-${SHA::7}" \
+            -e site_domain="${{ secrets.SITE_DOMAIN }}"
 
-      - name: Smoke test the deployment, and say so if it failed
+      - name: Smoke test the deployment
         run: BASE="https://${{ secrets.SITE_DOMAIN }}" bash scripts/smoke.sh

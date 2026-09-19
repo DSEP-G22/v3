@@ -48,17 +48,22 @@ deploy.
 | Secret | What it is |
 | --- | --- |
 | `DEPLOY_HOST` | The elastic IP or host name |
-| `DEPLOY_SSH_KEY` | Private half of the EC2 key pair |
-| `SITE_DOMAIN` | The name the certificate is issued for |
+| `DEPLOY_USER` | The SSH user; it needs passwordless sudo |
+| `DEPLOY_SSH_KEY` | A private key made for deploys only; its public half goes in the server's `~/.ssh/authorized_keys` |
+| `SITE_DOMAIN` | The name the certificate is issued for. With no domain of your own, `<ip-with-dashes>.sslip.io` resolves to the server and gets a real certificate |
 | `ACME_EMAIL` | Where Let's Encrypt sends expiry warnings |
 | `NEON_KEY` | The pooled Neon connection string |
 | `BETTER_AUTH_SECRET` | `openssl rand -base64 32` |
 | `TIMESCALE_PASSWORD`, `MINIO_ROOT_PASSWORD` | Local infrastructure passwords |
 | `OLLAMA_API_KEY`, `GOOGLE_API_KEY` | The drafting model and its fallback |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Optional, for sign in with Google |
+| `SEED_STAFF_PASSWORD`, `SEED_CUSTOMER_PASSWORD` | Optional; the seeded logins |
+| `CI_NEON_KEY` | Not a deploy secret: a Neon **branch** for CI's end to end job. Never the production database, because that job suspends accounts and load tests |
 
 The playbook writes them into `/opt/lanka-link/.env` with mode 0600 on every run, so the server
-never holds a secret that the repository's secret store does not.
+never holds a secret that the repository's secret store does not. The template is a whitelist of
+what the stack reads: the deploy settings (`DEPLOY_*`) and anything else on the deploying machine
+never reach the server.
 
 ## 3. The deploy
 
@@ -67,17 +72,14 @@ hand from the Actions tab, or from a laptop:
 
 ```bash
 cd infra/deploy/ansible
-cp inventory.example.ini inventory.ini    # then fill in the host
-ansible-playbook -i inventory.ini deploy.yml \
-  -e github_owner=dsep-g22 -e ghcr_token=$GHCR_PAT \
-  -e site_domain=lankalink.example.lk -e acme_email=ops@example.lk \
-  -e neon_key="$NEON_KEY" -e better_auth_secret="$BETTER_AUTH_SECRET" \
-  -e timescale_password=... -e minio_password=...
+cp inventory.example.ini inventory.ini    # then fill in the host and user
+set -a; . ../../../.env; set +a           # the stack's secrets, as environment variables
+ansible-playbook -i inventory.ini deploy.yml --private-key ~/.ssh/deploy   -e github_owner=DSEP-G22 -e site_domain=<your-domain> -e v3_tag=sha-<first-7-of-commit>
 ```
 
 What it does, in order: installs Docker and the compose plugin, checks the repository out at
 `/opt/lanka-link` (compose mounts the Caddyfile, the NATS config and the DAGs from it), writes
-`.env`, signs in to GHCR, pulls the images, runs `up -d --wait` so every health check has to pass,
+`.env`, pulls the images (public on GHCR, so no login), runs `up -d --wait` so every health check has to pass,
 waits for `https://<domain>/healthz`, then prunes images older than a week.
 
 Deploys are serialised by a concurrency group, so two pushes cannot roll over each other.

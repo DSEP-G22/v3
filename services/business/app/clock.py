@@ -32,5 +32,6 @@ if __name__ == "__main__":
     assert c.now(t0 + timedelta(seconds=10)) == t0 + timedelta(minutes=10)
     paused = ClockState(speed=0.0, anchor_wall=t0, anchor_sim=t0)
     assert paused.now(t0 + timedelta(hours=5)) == t0
-    assert c.reanchor(advance=timedelta(hours=-3)).anchor_sim >= c.now()
+    before = c.now()  # taken first: at 60x even a microsecond later is further ahead
+    assert c.reanchor(advance=timedelta(hours=-3)).anchor_sim >= before
     print("clock ok")
