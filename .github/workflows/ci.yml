@@ -53,34 +53,28 @@ jobs:
       - run: npm run build
 
   e2e:
-    # Needs CI_NEON_KEY: a Neon *branch*, never the production database (this job suspends accounts,
-    # opens tickets and load tests). Skipped until that secret exists.
+    # The CI stack (no model images, offline stub LLM) on its own Postgres (compose.test.yaml):
+    # no secret needed, and nothing it does (suspending an account, load) reaches production.
     runs-on: ubuntu-latest
     needs: [python, web]
     env:
-      NEON_KEY: ${{ secrets.CI_NEON_KEY }}
-      BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+      COMPOSE_FILE: compose.yaml:compose.ci.yaml:compose.test.yaml
+      COMPOSE_PATH_SEPARATOR: ":"
     steps:
       - uses: actions/checkout@v4
-        if: env.NEON_KEY != ''
-      - if: env.NEON_KEY != ''
-        run: |
+      - run: |
           cp .env.example .env
-          sed -i "s|^NEON_KEY=.*|NEON_KEY=${NEON_KEY}|; s|^BETTER_AUTH_SECRET=.*|BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}|" .env
-          docker compose -f compose.yaml -f compose.ci.yaml up -d --build --wait
-      - if: env.NEON_KEY != ''
-        uses: astral-sh/setup-uv@v6
-      - if: env.NEON_KEY != ''
-        run: |
+          sed -i "s|^BETTER_AUTH_SECRET=.*|BETTER_AUTH_SECRET=$(openssl rand -base64 32)|" .env
+          docker compose up -d --build --wait || docker compose ps
+      - uses: astral-sh/setup-uv@v6
+      - run: |
           bash scripts/smoke.sh
           uv run --with httpx python scripts/verify_hot_swap.py
           uv run --with httpx python scripts/demo_flow.py
-      - if: env.NEON_KEY != ''
-        working-directory: web
+      - working-directory: web
         run: npm ci --no-audit --no-fund && npx playwright install --with-deps chromium && npx playwright test
-      - if: env.NEON_KEY != ''
-        run: bash scripts/load.sh
-      - if: failure() && env.NEON_KEY != ''
+      - run: bash scripts/load.sh
+      - if: failure()
         run: docker compose logs --no-color --tail 200
 
   gates:

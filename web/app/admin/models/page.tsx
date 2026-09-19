@@ -30,7 +30,7 @@ const STAGES: { id: string; label: string; service: string; role?: string; model
   { id: "prefetch", label: "Account", service: "business", model: "Account and network record", col: 1.3, row: 3, does: "Fetches the customer's line, bill and area in parallel." },
   { id: "fusion", label: "Fusion", service: "orchestrator", model: "Rules", col: 4, row: 1.5, does: "Joins every branch into one unified ticket, within each branch's time budget." },
   // The reasoning half returns along a second row, right to left, so the map uses the page's height.
-  { id: "triage", label: "Triage", service: "triage", model: "TriageModel (MiniLM + 18 signals)", col: 4, row: 4.4, does: "Routes to a department and scores the customer side priority." },
+  { id: "triage", label: "Triage", service: "triage", role: "llm_triage", model: "TriageModel (MiniLM + 18 signals)", col: 4, row: 4.4, does: "Routes to a department and scores the customer side priority, with an LLM or the distilled TriageModel. An LLM that does not answer in two seconds falls back to the TriageModel." },
   { id: "diagnose", label: "Diagnose", service: "knowledge", role: "llm_diagnose", model: "MiniLM retrieval + LLM", col: 3, row: 4.4, does: "Retrieves procedures and names the likely fault." },
   { id: "grounding", label: "Grounding", service: "grounding", model: "Rules on the record", col: 2, row: 4.4, does: "Assembles the one bundle the writer may use and scores our side." },
   { id: "draft", label: "Draft", service: "response", role: "llm_draft", model: "LLM", col: 1, row: 4.4, does: "Writes the reply, checks every sentence, releases or holds it." },
@@ -74,6 +74,8 @@ function curve(a: ReturnType<typeof box>, b: ReturnType<typeof box>) {
 const MODELS: Record<string, string[]> = {
   ollama: ["gpt-oss:120b-cloud", "gpt-oss:20b-cloud"],
   gemini: ["gemini-3.6-flash", "gemini-2.5-flash", "gemini-2.5-pro"],
+  groq: ["qwen/qwen3.8-27b", "openai/gpt-oss-20b", "openai/gpt-oss-120b", "groq/compound-mini", "groq/compound"],
+  model: ["triage_multitask"],
   stub: ["stub-generator-1"],
   rules: ["rules"],
   nllb: ["facebook/nllb-200-distilled-600M"],
@@ -162,8 +164,31 @@ export default function Models() {
         <Button onClick={verifyAll} disabled={checking.size > 0}><ShieldCheckIcon /> {checking.size ? "Verifying" : "Verify every model"}</Button>
       </div>
 
+      {/* A phone gets the stages as a list, in pipeline order; the map needs a wider screen. */}
+      {!loading && (
+        <ol className="space-y-2 md:hidden">
+          {STAGES.map((s) => {
+            const st = state(s.id);
+            const r = role(s.role);
+            return (
+              <li key={s.id}>
+                <button type="button" onClick={(e) => { setEdit(null); setSel({ id: s.id, origin: originOf(e) }); }}
+                        className={cn("flex w-full items-center gap-3 rounded-xl border bg-card p-3 text-left transition-colors active:bg-muted",
+                          checking.has(s.id) && "animate-pulse ring-4 ring-primary/20")}>
+                  <span className={cn("size-2.5 shrink-0 rounded-full", TONE[st])} title={WORD[st]} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-medium">{s.label}</span>
+                    <span className="block truncate font-mono text-[11px] text-muted-foreground">{r ? `${r.impl}:${r.model_version}` : s.model}</span>
+                  </span>
+                  <span className="shrink-0 text-[11px] text-muted-foreground">{WORD[st]}</span>
+                </button>
+              </li>
+            );
+          })}
+        </ol>
+      )}
       {loading ? <Skeleton className="h-96 rounded-2xl" /> : (
-        <div ref={frame} className="relative -mx-4 overflow-hidden md:-mx-6"
+        <div ref={frame} className="relative -mx-4 hidden overflow-hidden md:-mx-6 md:block"
              style={{ height: CONTENT_H * fit.scale, background: "radial-gradient(ellipse 62% 48% at 50% 45%, color-mix(in oklch, var(--primary) 14%, transparent), transparent 100%)" }}>
           <div className="relative origin-top-left" style={{ width: CONTENT_W, height: CONTENT_H, transform: `translateX(${fit.offset}px) scale(${fit.scale})` }}>
             <svg className="absolute inset-0 size-full" aria-hidden>

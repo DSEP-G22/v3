@@ -13,7 +13,7 @@
     repo: "https://github.com/{{ github_owner }}/{{ github_repo | default('v3') }}.git"
     branch: "{{ deploy_branch | default('main') }}"
     root: /opt/lanka-link
-    compose: "docker compose -f compose.yaml -f compose.prod.yaml"
+    compose: "docker compose -f compose.yaml -f compose.prod.yaml -f compose.monitoring.yaml"
 
   tasks:
     - name: Docker engine and the compose plugin
@@ -43,6 +43,18 @@
         version: "{{ branch }}"
         force: true
       register: checkout
+
+    # GRAFANA_ADMIN_PASSWORD as a secret wins. Without one, the server makes its own once and keeps
+    # it (read it with: sudo cat /opt/lanka-link/.grafana-password). Grafana only reads it on its
+    # first start; change it later in Grafana itself.
+    - name: A Grafana admin password that survives deploys
+      shell: umask 077 && openssl rand -base64 24 | tr -d '/+=' > {{ root }}/.grafana-password
+      args: { creates: "{{ root }}/.grafana-password" }
+
+    - name: Read it back for the .env
+      slurp: { src: "{{ root }}/.grafana-password" }
+      register: grafana_password
+      no_log: true
 
     - name: The .env beside it, readable only by root
       template:

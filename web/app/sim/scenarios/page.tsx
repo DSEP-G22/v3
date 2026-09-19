@@ -72,7 +72,7 @@ export default function Incidents() {
           <>
             <span className="text-sm text-muted-foreground">Equipment</span>
             <select value={chosenOlt} onChange={(e) => setOlt(e.target.value)} aria-label="Equipment"
-                    className="h-8 rounded-lg border bg-background px-2 text-sm">
+                    className="h-8 max-w-full min-w-0 rounded-lg border bg-background px-2 text-sm">
               {olts.map((o) => <option key={o.olt_id} value={o.olt_id}>{o.olt_id}, {o.exchange} ({o.health})</option>)}
             </select>
           </>
@@ -113,7 +113,7 @@ export default function Incidents() {
         {!board.length ? <p className="text-muted-foreground">Nothing is injected right now.</p> : (
           <ul className="grid gap-2 md:grid-cols-2">
             {board.map((f) => (
-              <li key={f.id} className="flex items-center justify-between gap-3 rounded-xl border bg-card p-3">
+              <li key={f.id} className="flex min-w-0 items-center justify-between gap-3 rounded-xl border bg-card p-3">
                 <div className="min-w-0">
                   <p className="truncate font-medium">{f.label}{f.source === "random" && <span className="text-muted-foreground"> (random)</span>}</p>
                   <p className="text-xs text-muted-foreground">{f.target_ref}, started {f.started_display}{f.eta_display ? `, ends ${f.eta_display}` : ""}</p>

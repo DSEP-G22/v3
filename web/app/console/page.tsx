@@ -70,7 +70,32 @@ export default function Inbox() {
           {tab === "needs_approval" ? "Nothing is waiting for approval." : "No cases here."}
         </p>
       ) : (
-        <div className="rounded-lg border">
+        <>
+        {/* A phone gets one card per case; the table needs a wider screen. */}
+        <ul className="space-y-2 md:hidden">
+          {data.cases.map((c) => (
+            <li key={c.id}>
+              <button type="button" onClick={() => router.push(`/console/cases/${c.id}`)}
+                      className="w-full space-y-2 rounded-xl border bg-card p-3 text-left transition-colors active:bg-muted">
+                <span className="flex items-start justify-between gap-3">
+                  <span className="min-w-0">
+                    <span className="block truncate font-medium">{c.customer}</span>
+                    <span className="block text-xs text-muted-foreground">{c.id}, waiting {waiting(c.opened_at)}</span>
+                  </span>
+                  <span className="shrink-0 text-right font-medium tabular-nums">{priority(c.priority_level, c.band)}</span>
+                </span>
+                <span className="line-clamp-2 block">{c.summary ?? "Reading the message"}</span>
+                <span className="flex flex-wrap items-center gap-2">
+                  <Badge variant="secondary">{department(c.department)}</Badge>
+                  <StatusDot tone={c.state === "AWAITING_APPROVAL" ? "warn" : c.state === "RESOLVED" ? "ok" : "info"}
+                             label={STATE_WORD[c.state] ?? c.state} />
+                  <PriorityPair customer={c.customer_priority} provider={c.provider_priority} className="ml-auto" />
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+        <div className="hidden rounded-lg border md:block">
           <Table>
             <TableHeader>
               <TableRow>
@@ -109,6 +134,7 @@ export default function Inbox() {
             </TableBody>
           </Table>
         </div>
+        </>
       )}
     </div>
   );

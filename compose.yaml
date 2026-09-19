@@ -221,6 +221,7 @@ services:
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       OLLAMA_API_KEY: ${OLLAMA_API_KEY:-}
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
     extra_hosts: ["host.docker.internal:host-gateway"]
     depends_on:
       migrate: { condition: service_completed_successfully }
@@ -298,6 +299,8 @@ services:
   triage:
     image: ghcr.io/${GHCR_OWNER:-dsep-g22}/lanka-link-v3-triage:${V3_TAG:-latest}
     build: { context: ., dockerfile: services/triage/Dockerfile }
+    environment: *llm-env
+    extra_hosts: ["host.docker.internal:host-gateway"]
     # The retrain DAG promotes new TriageModel weights here and calls POST /reload.
     volumes: ["./ml/models-live:/models-live:ro"]
     restart: unless-stopped

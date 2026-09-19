@@ -217,7 +217,7 @@ SERVICE_URL = {s: os.environ.get(f"{s.upper()}_URL", f"http://{s}:8000") for s i
 NODES: dict[str, tuple[str, str | None]] = {
     "intake": ("inquiry", None), "translate": ("translation", None), "speech": ("audio", None),
     "vision": ("image", None), "prefetch": ("business", None), "fusion": ("orchestrator", None),
-    "triage": ("triage", None), "diagnose": ("knowledge", "reasoning"), "grounding": ("grounding", None),
+    "triage": ("triage", "triage"), "diagnose": ("knowledge", "reasoning"), "grounding": ("grounding", None),
     "draft": ("response", "response"), "translate_out": ("translation", None),
 }
 TRIAGE_SAMPLE = "router eke cable ek disconnect wela, internet wada na"
@@ -284,11 +284,12 @@ async def verify(node: str) -> dict[str, Any]:
         try:
             r = await http.post(f"{SERVICE_URL['triage']}/run", json={"fused_text": TRIAGE_SAMPLE}, timeout=10)
             cp = r.json().get("customer_priority", {})
-            checks.append({"check": "TriageModel prediction", "status": "up" if cp.get("source") == "model" else "down",
+            # "rules" means neither the bound LLM nor the TriageModel answered.
+            checks.append({"check": "Triage prediction", "status": "down" if cp.get("source", "rules") == "rules" else "up",
                            "ms": int((time.perf_counter() - started) * 1000),
-                           "detail": {k: cp.get(k) for k in ("band", "level", "score", "confidence", "model_version")}})
+                           "detail": {k: cp.get(k) for k in ("source", "band", "level", "score", "model_version")}})
         except httpx.HTTPError as exc:
-            checks.append({"check": "TriageModel prediction", "status": "down", "ms": None, "detail": {"error": str(exc)}})
+            checks.append({"check": "Triage prediction", "status": "down", "ms": None, "detail": {"error": str(exc)}})
     if node in ("translate", "translate_out") and h["status"] == "up":
         # A real sentence through the bound backend, both directions named by the admin's binding.
         path, body = (("/run", {"text": "මගේ අන්තර්ජාලය වැඩ කරන්නේ නැහැ"}) if node == "translate"

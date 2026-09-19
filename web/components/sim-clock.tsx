@@ -23,8 +23,8 @@ export function SimClockBar() {
 
   if (!data) return null;
   return (
-    <div className="flex flex-wrap items-center gap-1.5 text-sm">
-      <span className="mr-2 tabular-nums font-medium">{data.sim_now_display}</span>
+    <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto text-sm whitespace-nowrap [scrollbar-width:none] md:flex-wrap">
+      <span className="mr-2 shrink-0 tabular-nums font-medium">{data.sim_now_display}</span>
       <Button size="xs" variant={data.paused ? "default" : "outline"}
               onClick={() => send("clock", { action: data.paused ? "resume" : "pause" })}>
         {data.paused ? "Resume" : "Pause"}

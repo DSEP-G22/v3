@@ -28,9 +28,10 @@ terraform apply -var="key_name=your-ec2-keypair" -var='ssh_cidrs=["YOUR.IP.ADDR.
 terraform output public_ip
 ```
 
-Default size is `t3.xlarge` (4 vCPU, 16 GB) with an 80 GB disk. Both are about the models: NLLB and
-Whisper stay resident, and their image layers are large. A smaller instance will start and then
-fail health checks.
+Default size is `m6i.xlarge` (4 vCPU, 16 GB, not burstable) with an 80 GB disk. The models are CPU
+bound on every message, and a burstable `t3` runs out of CPU credits under steady traffic. 8 GB of
+memory is enough: the production VPS (2 vCPU, 7.7 GB) runs the whole stack plus monitoring in about
+4.5 GB. Fewer cores only make speech and translation slower (a voice note takes about 10 s on 2 vCPU).
 
 Point the site's A record at the elastic IP before the first deploy, because Caddy asks Let's
 Encrypt for a certificate on first start.
@@ -56,9 +57,10 @@ deploy.
 | `BETTER_AUTH_SECRET` | `openssl rand -base64 32` |
 | `TIMESCALE_PASSWORD`, `MINIO_ROOT_PASSWORD` | Local infrastructure passwords |
 | `OLLAMA_API_KEY`, `GOOGLE_API_KEY` | The drafting model and its fallback |
+| `GROQ_API_KEY` | Groq: the default triage model (falls back to the distilled TriageModel without it) |
+| `GRAFANA_ADMIN_PASSWORD` | Optional. Without it the server generates one on the first deploy and keeps it in `/opt/lanka-link/.grafana-password` |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Optional, for sign in with Google |
 | `SEED_STAFF_PASSWORD`, `SEED_CUSTOMER_PASSWORD` | Optional; the seeded logins |
-| `CI_NEON_KEY` | Not a deploy secret: a Neon **branch** for CI's end to end job. Never the production database, because that job suspends accounts and load tests |
 
 The playbook writes them into `/opt/lanka-link/.env` with mode 0600 on every run, so the server
 never holds a secret that the repository's secret store does not. The template is a whitelist of
@@ -135,7 +137,26 @@ The system suite is safe against a live deployment in the sense that it only app
 does open real tickets as the seeded personas, so run it against production once, deliberately,
 and not on a schedule.
 
-## 7. When something is wrong
+## 7. Monitoring
+
+`compose.monitoring.yaml` runs beside the stack on the server: Prometheus (15 days, at most 2 GB),
+node-exporter for the host, cAdvisor for every container, a blackbox exporter that probes each
+service's health endpoint and the public URL, and Grafana. Grafana is the only part reachable from
+outside, at `https://<domain>/grafana`, user `admin`.
+
+The dashboard **Lanka Link: VPS and services** is provisioned from
+`infra/monitoring/grafana/dashboards/lanka-link-vps.json` and opens as Grafana's home page:
+headline tiles (services healthy, public site, CPU, memory, disk, edge requests, certificate
+expiry), then host, containers, health checks and the edge (requests by status, p50/p95/p99, 5xx
+share). To change it, edit `infra/monitoring/grafana/build_dashboard.py`, run it, and push.
+Alert rules (`infra/monitoring/alerts.yml`) cover a service down, the public site down, a
+certificate inside 14 days, memory, disk and CPU saturation, and edge errors; they show on the
+dashboard. No notifier is wired: add a Grafana contact point when someone is on call.
+
+The server's `.env` sets `COMPOSE_FILE`, so a plain `sudo docker compose ps` in `/opt/lanka-link`
+sees the same three files the deploy uses.
+
+## 8. When something is wrong
 
 | Symptom | Where to look |
 | --- | --- |
@@ -143,4 +164,4 @@ and not on a schedule.
 | No certificate | `docker compose logs edge`; the A record has to exist before Caddy's first start |
 | Sign-in hangs | `docker compose restart auth`; a network drop can leave dead pooled sockets |
 | Replies are never drafted | `/admin/models`, verify the `llm_draft` binding; the fallback binding and the circuit breaker are on the same page |
-| Everything is slow | `uv run python scripts/neon-latency.py`; if it is not the database, `docker stats` |
+| Everything is slow | `uv run python scripts/neon-latency.py`; if it is not the database, the Grafana dashboard's host and container rows |

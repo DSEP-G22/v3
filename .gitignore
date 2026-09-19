@@ -40,3 +40,6 @@ ml/models-live/*
 .dvc/tmp/
 
 PLAN.md
+HANDOFF.md
+# Test plan runs (scripts/test-plan.sh); the report that quotes one lives in docs/test-report/
+reports/

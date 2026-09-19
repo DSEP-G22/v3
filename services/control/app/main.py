@@ -31,10 +31,13 @@ CONFIG_DIR = Path(os.environ.get("LANKA_CONFIG_DIR") or Path(__file__).resolve()
 #: role -> (stage, summary, allowed impls, default impl, default model, default params)
 ROLES: dict[str, tuple[str, str, tuple[str, ...], str, str, dict[str, Any]]] = {
     "llm_draft": ("response", "Write the reply from the assembled context bundle.",
-                  ("ollama", "gemini", "stub"), "ollama", "gpt-oss:120b-cloud",
+                  ("ollama", "gemini", "groq", "stub"), "ollama", "gpt-oss:120b-cloud",
                   {"fallback": {"impl": "gemini", "model_version": "gemini-3.6-flash"}}),
     "llm_diagnose": ("reasoning", "Diagnose the fault from the message and retrieved procedures.",
-                     ("ollama", "gemini", "rules", "stub"), "ollama", "gpt-oss:20b-cloud", {"think": "low"}),
+                     ("ollama", "gemini", "groq", "rules", "stub"), "ollama", "gpt-oss:20b-cloud", {"think": "low"}),
+    # "model" is the distilled TriageModel in the triage service; an LLM reading falls back to it.
+    "llm_triage": ("triage", "Score how urgent the customer's message is (the customer side priority).",
+                   ("groq", "model", "ollama", "gemini"), "groq", "qwen/qwen3.8-27b", {"max_tokens": 600, "temperature": 0}),
     "mt_in": ("translation", "Translate what the customer wrote into English.",
               ("nllb", "google", "passthrough"), "nllb", "facebook/nllb-200-distilled-600M", {}),
     "mt_out": ("translation", "Translate the approved reply into the customer's language.",
@@ -90,7 +93,7 @@ rt = Runtime()
 async def _seed() -> None:
     async with rt.pool.acquire() as conn, conn.transaction():
         for role, (_, _, _, impl, model, params) in ROLES.items():
-            if role.startswith("llm_") and os.environ.get("LANKA_LLM_IMPL"):
+            if role.startswith("llm_") and os.environ.get("LANKA_LLM_IMPL") in ROLES[role][2]:
                 impl = os.environ["LANKA_LLM_IMPL"]  # CI and load tests seed the offline stub
             await conn.execute("""INSERT INTO control.model_binding (role, impl, model_version, params)
                                   VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING""", role, impl, model, json.dumps(params))
@@ -202,7 +205,7 @@ async def probe(role: str, deep: bool = False) -> dict[str, Any]:
 
     b = await binding(role)
     started = time.perf_counter()
-    if not role.startswith("llm_") or b["impl"] == "rules":
+    if not role.startswith("llm_") or b["impl"] in ("rules", "model"):
         status, detail = "unknown", "Probed through the service health check."
     else:
         try:

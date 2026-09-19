@@ -2,6 +2,8 @@
 # and Caddy gets the certificate from Let's Encrypt on first start.
 {
 	admin off
+	# Request counts, status codes and latency for Prometheus, served at /metrics below.
+	metrics
 	email {$ACME_EMAIL}
 }
 
@@ -10,6 +12,11 @@
 
 	handle /healthz {
 		respond "ok" 200
+	}
+
+	# Grafana (compose.monitoring.yaml); its own login guards it.
+	handle /grafana* {
+		reverse_proxy grafana:3000
 	}
 
 	handle /api/auth/* {
@@ -30,4 +37,5 @@
 # Inside the compose network only (8080 is not published): the container health check.
 :8080 {
 	respond /healthz "ok" 200
+	metrics /metrics
 }

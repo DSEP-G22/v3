@@ -53,12 +53,6 @@ ALTER TABLE inquiry.conversation ADD COLUMN IF NOT EXISTS rating smallint;
 ALTER TABLE inquiry.conversation ADD COLUMN IF NOT EXISTS feedback text;
 ALTER TABLE inquiry.conversation ADD COLUMN IF NOT EXISTS feedback_at timestamptz;
 CREATE INDEX IF NOT EXISTS ix_conversation_user ON inquiry.conversation (user_id, updated_at DESC);
--- Conversations from before tickets get a subject from their first message.
-UPDATE inquiry.conversation c SET subject = coalesce(
-    (SELECT left(split_part(m.body, E'\n', 1), 80) FROM inquiry.message m
-     WHERE m.conversation_id = c.id AND m.author_kind = 'customer' AND m.body <> '' ORDER BY m.created_at LIMIT 1),
-    'Earlier conversation')
-WHERE c.subject IS NULL;
 CREATE TABLE IF NOT EXISTS inquiry.message (
     id              text PRIMARY KEY,
     conversation_id text NOT NULL REFERENCES inquiry.conversation (id),
@@ -73,6 +67,13 @@ CREATE TABLE IF NOT EXISTS inquiry.message (
     created_at      timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS ix_message_conversation ON inquiry.message (conversation_id, created_at);
+-- Conversations from before tickets get a subject from their first message. It reads
+-- inquiry.message, so it runs after that table exists (a fresh database failed here).
+UPDATE inquiry.conversation c SET subject = coalesce(
+    (SELECT left(split_part(m.body, E'\n', 1), 80) FROM inquiry.message m
+     WHERE m.conversation_id = c.id AND m.author_kind = 'customer' AND m.body <> '' ORDER BY m.created_at LIMIT 1),
+    'Earlier conversation')
+WHERE c.subject IS NULL;
 CREATE TABLE IF NOT EXISTS inquiry.attachment (
     id              text PRIMARY KEY,
     message_id      text REFERENCES inquiry.message (id),

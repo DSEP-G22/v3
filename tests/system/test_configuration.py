@@ -18,10 +18,13 @@ COMBOS = [
     ["compose.yaml", "compose.ci.yaml"],
     ["compose.yaml", "compose.gpu.yaml"],
     ["compose.yaml", "compose.prod.yaml"],
+    ["compose.yaml", "compose.test.yaml"],
+    ["compose.yaml", "compose.ci.yaml", "compose.test.yaml"],
+    ["compose.yaml", "compose.prod.yaml", "compose.monitoring.yaml"],
 ]
 
 #: compose.prod.yaml refuses to render without a host name, which is the point of it.
-ENV = {"SITE_DOMAIN": "lankalink.example.lk"}
+ENV = {"SITE_DOMAIN": "lankalink.example.lk", "GRAFANA_ADMIN_PASSWORD": "configuration-test"}
 
 
 @pytest.mark.skipif(not shutil.which("docker"), reason="docker is not installed")
@@ -49,8 +52,9 @@ def test_every_variable_the_compose_file_reads_is_in_the_example():
     import re
     example = {m.group(1) for m in re.finditer(r"(?m)^([A-Z][A-Z0-9_]*)=", (ROOT / ".env.example").read_text(encoding="utf-8"))}
     used = set()
-    example |= {"SITE_DOMAIN", "ACME_EMAIL"}  # written by the deploy, not by hand
-    for f in ("compose.yaml", "compose.ci.yaml", "compose.gpu.yaml", "compose.lite.yaml", "compose.prod.yaml"):
+    example |= {"SITE_DOMAIN", "ACME_EMAIL", "PUBLIC_PROBE_URL"}  # written by the deploy, or an optional override
+    for f in ("compose.yaml", "compose.ci.yaml", "compose.gpu.yaml", "compose.lite.yaml", "compose.prod.yaml",
+              "compose.test.yaml", "compose.monitoring.yaml"):
         text = (ROOT / f).read_text(encoding="utf-8")
         used |= {m.group(1) for m in re.finditer(r"\$\{([A-Z][A-Z0-9_]*)[:\-}]", text)}
     assert not (used - example), f"not in .env.example: {sorted(used - example)}"

@@ -9,5 +9,9 @@ export default defineConfig({
     baseURL: process.env.LANKA_URL ?? "http://localhost:8080",
     trace: "retain-on-failure",
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  projects: [
+    { name: "chromium", use: { ...devices["Desktop Chrome"] }, testIgnore: /mobile\.spec/ },
+    // A phone-sized Chromium (Pixel 7 touch, narrowed to a 375 wide phone), so no WebKit download is needed.
+    { name: "mobile", use: { ...devices["Pixel 7"], viewport: { width: 375, height: 812 } }, testMatch: /mobile\.spec/ },
+  ],
 });

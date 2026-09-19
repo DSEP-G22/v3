@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Instrument_Serif, Noto_Sans_Sinhala, Noto_Sans_Tamil } from "next/font/google";
 
 import { ThemeProvider } from "@/components/theme-provider";
@@ -17,6 +17,9 @@ export const metadata: Metadata = {
   title: { default: "Lanka Link", template: "%s | Lanka Link" },
   description: "Fibre, home broadband and mobile data across Sri Lanka.",
 };
+
+// Edge to edge on notched phones; the bottom tab bar pads itself with the safe area inset.
+export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover" };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

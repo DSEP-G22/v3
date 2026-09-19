@@ -38,7 +38,8 @@ async def _create_tables(direct_dsn: str) -> None:
 
     # SQLAlchemy hands URL query params to asyncpg as kwargs, and asyncpg has no `sslmode` kwarg.
     url = direct_dsn.split("?", 1)[0].replace("postgresql://", "postgresql+asyncpg://", 1)
-    engine = create_async_engine(url, connect_args={"ssl": "require"})
+    # Neon asks for TLS in the URL; the throwaway test Postgres (compose.test.yaml) has none.
+    engine = create_async_engine(url, connect_args={"ssl": "require"} if "sslmode=require" in direct_dsn else {})
     async with engine.begin() as conn:
         await conn.run_sync(OrgBase.metadata.create_all)
     await engine.dispose()

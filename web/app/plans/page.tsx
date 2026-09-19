@@ -2,7 +2,9 @@ import { PlanCard } from "@/components/plan-card";
 import { SiteHeader } from "@/components/site-header";
 import { getPlans } from "@/lib/server";
 
-export const revalidate = 60;
+// Rendered per request (the fetch keeps a one minute cache): prerendering at image build time, when
+// no gateway exists, cached an empty catalogue that every deploy then served.
+export const dynamic = "force-dynamic";
 export const metadata = { title: "Plans" };
 
 export default async function PlansPage() {

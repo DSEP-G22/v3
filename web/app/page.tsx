@@ -8,7 +8,9 @@ import { SessionNav } from "@/components/session-nav";
 import { getPlans } from "@/lib/server";
 import { cn } from "@/lib/utils";
 
-export const revalidate = 60;
+// Rendered per request (the fetch keeps a one minute cache): prerendering at image build time, when
+// no gateway exists, cached an empty catalogue that every deploy then served.
+export const dynamic = "force-dynamic";
 
 const NAV: [string, string][] = [["Plans", "/plans"], ["How it works", "/docs"]];
 const DOES = [
@@ -97,11 +99,11 @@ export default async function Landing() {
               </h2>
               <Link href="/docs" className={cn(DARK, "mt-10")}>Read how <ArrowRightIcon className="size-3.5" /></Link>
             </div>
-            <div className="relative flex min-h-80 items-center justify-center gap-3 border-b border-white/10 p-8 [background-image:radial-gradient(rgba(255,255,255,0.14)_1px,transparent_1px)] [background-size:16px_16px]">
+            <div className="relative flex min-h-80 items-center justify-center gap-2 border-b border-white/10 p-6 sm:gap-3 sm:p-8 [background-image:radial-gradient(rgba(255,255,255,0.14)_1px,transparent_1px)] [background-size:16px_16px]">
               <Keycap><MessageSquareTextIcon className="size-6" /></Keycap>
-              <span aria-hidden className="h-px w-10 border-t border-dashed border-white/30 sm:w-16" />
+              <span aria-hidden className="h-px w-6 border-t border-dashed border-white/30 sm:w-16" />
               <Keycap big><LogoIcon mono className="size-9" /></Keycap>
-              <span aria-hidden className="h-px w-10 border-t border-dashed border-white/30 sm:w-16" />
+              <span aria-hidden className="h-px w-6 border-t border-dashed border-white/30 sm:w-16" />
               <Keycap><CheckCheckIcon className="size-6" /></Keycap>
             </div>
           </div>

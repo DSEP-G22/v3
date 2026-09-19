@@ -1,33 +1,35 @@
 "use client";
 
-import { GlobeIcon, LogOutIcon } from "lucide-react";
+import { GaugeIcon, GlobeIcon, HouseIcon, LifeBuoyIcon, LogOutIcon, ReceiptTextIcon, SettingsIcon, WifiIcon, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 
 import { Brand } from "@/components/brand";
-import { RoleGate } from "@/components/role-gate";
+import { RoleGate, signOutTo } from "@/components/role-gate";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { forgetToken, prefetch } from "@/lib/api";
-import { signOut } from "@/lib/auth-client";
+import { prefetch } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const WARM = ["/app/overview", "/app/tickets", "/app/notices", "/app/billing", "/app/usage", "/app/plan"];
 
-type Item = { href: string; label: string; sub?: { href: string; label: string }[] };
+type Item = { href: string; label: string; icon: LucideIcon; sub?: { href: string; label: string }[] };
 const NAV: Item[] = [
-  { href: "/app", label: "Home" },
-  { href: "/app/tickets", label: "Support", sub: [{ href: "/app/tickets", label: "Your tickets" }, { href: "/app/tickets/new", label: "Open a ticket" }] },
-  { href: "/app/billing", label: "Billing", sub: [{ href: "/app/billing?tab=overview", label: "Overview" },
+  { href: "/app", label: "Home", icon: HouseIcon },
+  { href: "/app/tickets", label: "Support", icon: LifeBuoyIcon, sub: [{ href: "/app/tickets", label: "Your tickets" }, { href: "/app/tickets/new", label: "Open a ticket" }] },
+  { href: "/app/billing", label: "Billing", icon: ReceiptTextIcon, sub: [{ href: "/app/billing?tab=overview", label: "Overview" },
     { href: "/app/billing?tab=activity", label: "Activity" }, { href: "/app/billing?tab=invoices", label: "Invoices" }] },
-  { href: "/app/usage", label: "Usage" },
-  { href: "/app/plan", label: "Plan" },
-  { href: "/app/settings", label: "Settings" },
+  { href: "/app/usage", label: "Usage", icon: GaugeIcon },
+  { href: "/app/plan", label: "Plan", icon: WifiIcon },
+  { href: "/app/settings", label: "Settings", icon: SettingsIcon },
 ];
+/** A phone gets these as a bottom tab bar (five at most); Settings moves to the header. */
+const TABS = NAV.filter((n) => n.href !== "/app/settings");
 
 export default function CustomerLayout({ children }: { children: React.ReactNode }) {
   const path = usePathname();
   const router = useRouter();
+  const isActive = (href: string) => (href === "/app" ? path === "/app" : path.startsWith(href));
   // Every tab's data, fetched once in the background: switching tabs then shows it at once.
   useEffect(() => {
     const t = setTimeout(() => WARM.forEach(prefetch), 300);
@@ -39,9 +41,9 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
         <header className="sticky top-0 z-30 border-b bg-background/75 backdrop-blur-xl">
           <div className="mx-auto flex h-14 w-full max-w-5xl items-center gap-6 px-4">
             <Brand href="/app" />
-            <nav className="-mx-2 flex gap-1 overflow-x-auto text-sm md:overflow-visible" aria-label="Main">
+            <nav className="-mx-2 hidden gap-1 text-sm md:flex" aria-label="Main">
               {NAV.map((n) => {
-                const active = n.href === "/app" ? path === "/app" : path.startsWith(n.href);
+                const active = isActive(n.href);
                 return (
                   <div key={n.href} className="group/nav relative">
                     <Link
@@ -73,18 +75,41 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
               })}
             </nav>
             <div className="ml-auto flex shrink-0 items-center gap-1">
+              <Link href="/app/settings" aria-label="Settings" title="Settings" aria-current={isActive("/app/settings") ? "page" : undefined}
+                    className={buttonVariants({ variant: "ghost", size: "icon-lg", className: cn("text-muted-foreground md:hidden", isActive("/app/settings") && "text-primary") })}>
+                <SettingsIcon />
+              </Link>
               <Link href="/" aria-label="Lanka Link website" title="Lanka Link website"
-                    className={buttonVariants({ variant: "ghost", size: "sm", className: "text-muted-foreground" })}>
+                    className={buttonVariants({ variant: "ghost", size: "sm", className: "text-muted-foreground max-md:size-11" })}>
                 <GlobeIcon /> <span className="hidden md:inline">Website</span>
               </Link>
-              <Button variant="ghost" size="sm" className="text-muted-foreground" aria-label="Sign out" title="Sign out"
-                      onClick={async () => { await signOut(); forgetToken(); router.replace("/"); }}>
+              <Button variant="ghost" size="sm" className="text-muted-foreground max-md:size-11" aria-label="Sign out" title="Sign out"
+                      onClick={() => signOutTo(router, "/")}>
                 <LogOutIcon /> <span className="hidden md:inline">Sign out</span>
               </Button>
             </div>
           </div>
         </header>
-        <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8">{children}</main>
+        <main className="mx-auto w-full max-w-5xl flex-1 px-4 pt-6 pb-28 md:py-8">{children}</main>
+        <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-30 border-t bg-background/85 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden">
+          <ul className="mx-auto grid max-w-md grid-cols-5">
+            {TABS.map(({ href, label, icon: Icon }) => {
+              const active = isActive(href);
+              return (
+                <li key={href}>
+                  <Link href={href} aria-current={active ? "page" : undefined}
+                        className={cn("flex min-h-14 flex-col items-center justify-center gap-1 text-[11px] text-muted-foreground transition-colors",
+                          active && "font-medium text-primary")}>
+                    <span className={cn("grid h-7 w-12 place-items-center rounded-full transition-colors", active && "bg-primary/10")}>
+                      <Icon className="size-5" aria-hidden />
+                    </span>
+                    {label}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
       </div>
     </RoleGate>
   );

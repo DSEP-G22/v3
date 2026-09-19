@@ -1,0 +1,7 @@
+apiVersion: 1
+providers:
+  - name: lanka-link
+    folder: Lanka Link
+    type: file
+    allowUiUpdates: true
+    options: { path: /var/lib/grafana/dashboards }

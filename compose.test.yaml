@@ -1,0 +1,33 @@
+# Test profile: the whole stack on a throwaway Postgres instead of Neon, so a test run, a load run
+# or the resilience suite never writes into the production database (local and production share
+# one Neon project). The schema and the seeded world are built from scratch by migrate and seed.
+#   docker compose -f compose.yaml -f compose.test.yaml up -d --wait
+#   docker compose -f compose.yaml -f compose.test.yaml down -v      # throw the data away
+# Add -f compose.ci.yaml for the model-free CI shape. scripts/test-plan.sh runs the whole plan on it.
+x-db: &db
+  NEON_KEY: postgresql://lanka:lanka@testdb:5432/lanka
+
+services:
+  testdb:
+    # The Timescale image already carries pgvector, so this pulls nothing new.
+    image: timescale/timescaledb:latest-pg17
+    environment: { POSTGRES_USER: lanka, POSTGRES_PASSWORD: lanka, POSTGRES_DB: lanka }
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lanka -d lanka"]
+      interval: 2s
+      retries: 30
+
+  migrate:
+    environment: *db
+    depends_on:
+      testdb: { condition: service_healthy }
+  seed: { environment: *db }
+  auth: { environment: *db }
+  business: { environment: *db }
+  business-sim: { environment: *db }
+  payments: { environment: *db }
+  inquiry: { environment: *db }
+  orchestrator: { environment: *db }
+  control: { environment: *db }
+  grounding: { environment: *db }
+  response: { environment: *db }

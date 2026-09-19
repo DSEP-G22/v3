@@ -6,8 +6,8 @@
 #   DEPLOY_SSH_KEY   private key the runner connects with; its public half is in authorized_keys
 #   SITE_DOMAIN      the name the certificate is issued for
 #   NEON_KEY, BETTER_AUTH_SECRET, TIMESCALE_PASSWORD, MINIO_ROOT_PASSWORD
-#   GOOGLE_API_KEY, OLLAMA_API_KEY, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET,
-#   SEED_STAFF_PASSWORD, SEED_CUSTOMER_PASSWORD, ACME_EMAIL                  (optional)
+#   GOOGLE_API_KEY, OLLAMA_API_KEY, GROQ_API_KEY, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET,
+#   SEED_STAFF_PASSWORD, SEED_CUSTOMER_PASSWORD, ACME_EMAIL, GRAFANA_ADMIN_PASSWORD (optional)
 name: deploy
 
 on:
@@ -60,6 +60,8 @@ jobs:
           MINIO_ROOT_PASSWORD: ${{ secrets.MINIO_ROOT_PASSWORD }}
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
           OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          GRAFANA_ADMIN_PASSWORD: ${{ secrets.GRAFANA_ADMIN_PASSWORD }}
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           SEED_STAFF_PASSWORD: ${{ secrets.SEED_STAFF_PASSWORD }}

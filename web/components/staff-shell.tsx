@@ -21,7 +21,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { LOGO_RATIO, LogoMark } from "@/components/logo";
-import { roleOf, type Role } from "@/components/role-gate";
+import { roleOf, signOutTo, type Role } from "@/components/role-gate";
 import {
   CommandDialog,
   CommandEmpty,
@@ -46,8 +46,8 @@ import {
   SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { api, forgetToken, prefetch } from "@/lib/api";
-import { signOut, useSession } from "@/lib/auth-client";
+import { api, prefetch } from "@/lib/api";
+import { useSession } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 
 type NavItem = { href: string; label: string; icon: LucideIcon };
@@ -216,11 +216,7 @@ export function StaffShell({ children, bar }: { children: ReactNode; bar?: React
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <SidebarMenuButton tooltip="Sign out" onClick={async () => {
-                await signOut();
-                forgetToken();
-                router.replace("/sign-in");
-              }}>
+              <SidebarMenuButton tooltip="Sign out" onClick={() => signOutTo(router, "/sign-in")}>
                 <LogOutIcon />
                 <span className="whitespace-nowrap transition-opacity duration-300 group-data-[collapsible=icon]:opacity-0">Sign out</span>
               </SidebarMenuButton>
@@ -230,7 +226,7 @@ export function StaffShell({ children, bar }: { children: ReactNode; bar?: React
       </Sidebar>
       <SidebarInset className="!bg-transparent text-sm">
         <header className="sticky top-0 z-10 flex h-12 items-center gap-3 border-b bg-background/80 px-4 backdrop-blur">
-          <SidebarTrigger className="md:hidden" />
+          <SidebarTrigger className="size-10 md:hidden" />
           {bar}
           <span className="ml-auto hidden text-xs text-muted-foreground sm:inline">Ctrl K to find a case</span>
         </header>

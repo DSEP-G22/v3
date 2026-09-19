@@ -1,0 +1,39 @@
+# Shown on the dashboard's alert panel and in Grafana's alert list. No notifier is wired yet:
+# add a Grafana contact point (email, Slack) when someone is on call for this.
+groups:
+  - name: lanka-link
+    rules:
+      - alert: ServiceDown
+        expr: probe_success{job="health"} == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations: { summary: "{{ $labels.service }} has failed its health check for 2 minutes" }
+      - alert: PublicSiteDown
+        expr: probe_success{job="public"} == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations: { summary: "The public URL is not answering" }
+      - alert: CertificateExpiresSoon
+        expr: probe_ssl_earliest_cert_expiry{job="public"} - time() < 14 * 86400
+        labels: { severity: warning }
+        annotations: { summary: "The TLS certificate expires in under 14 days" }
+      - alert: HostMemoryHigh
+        expr: 1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes > 0.9
+        for: 10m
+        labels: { severity: warning }
+        annotations: { summary: "Less than 10 percent of the VPS memory is available" }
+      - alert: HostDiskFilling
+        expr: 1 - node_filesystem_avail_bytes{mountpoint="/",fstype!="rootfs"} / node_filesystem_size_bytes{mountpoint="/",fstype!="rootfs"} > 0.85
+        for: 10m
+        labels: { severity: warning }
+        annotations: { summary: "The root disk is more than 85 percent full" }
+      - alert: HostCpuSaturated
+        expr: 1 - avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) > 0.9
+        for: 15m
+        labels: { severity: warning }
+        annotations: { summary: "CPU above 90 percent for 15 minutes" }
+      - alert: EdgeErrors
+        expr: (sum(rate(caddy_http_request_duration_seconds_count{code=~"5.."}[5m])) or vector(0)) / sum(rate(caddy_http_request_duration_seconds_count[5m])) > 0.05
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: "More than 5 percent of requests at the edge are failing" }

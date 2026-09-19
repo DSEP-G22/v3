@@ -1,5 +1,5 @@
-"""Text generators behind one async interface: Ollama (gpt-oss), OpenAI-compatible (Gemini
-fallback) and a deterministic, grounded stub. Ported from v2 cst2/modelctl/llm.py.
+"""Text generators behind one async interface: Ollama (gpt-oss), OpenAI-compatible (Gemini,
+Groq) and a deterministic, grounded stub. Ported from v2 cst2/modelctl/llm.py.
 
 Every generator's output goes through the punctuation scrub, so no model can put an em dash
 in front of a customer. Each client caps concurrency and trips a circuit breaker after
@@ -146,12 +146,16 @@ class Ollama:
 
 
 class OpenAICompatible:
-    """Chat completions (Gemini's OpenAI endpoint, or any compatible provider)."""
+    """Chat completions (Gemini's OpenAI endpoint, Groq, or any compatible provider)."""
 
-    name = "gemini"
-
-    def __init__(self, base_url: str, model: str, api_key: str | None, timeout_s: float = 60.0) -> None:
-        self.base_url, self.model, self._key = base_url.rstrip("/"), model, api_key
+    def __init__(self, base_url: str, model: str, api_key: str | None, timeout_s: float = 60.0,
+                 name: str = "gemini", **extra: Any) -> None:
+        self.base_url, self.model, self._key, self.name = base_url.rstrip("/"), model, api_key, name
+        # Groq counts the requested completion budget against a tokens-per-minute limit, so an
+        # unbounded request reserves the model's whole window and the next call gets a 429.
+        # A binding's params may set max_tokens and temperature (triage scores at 0, so a message
+        # gets the same level every time).
+        self._extra = {k: v for k, v in extra.items() if v is not None}
         self._http = httpx.AsyncClient(timeout=timeout_s)
         self._breaker = _Breaker()
 
@@ -169,7 +173,7 @@ class OpenAICompatible:
         try:
             async with self._http.stream("POST", f"{self.base_url}/chat/completions", headers=self._headers(),
                                          json={"model": self.model, "messages": messages, "stream": True,
-                                               "temperature": 0.2}) as r:
+                                               **{"temperature": 0.2, **self._extra}}) as r:
                 r.raise_for_status()
                 async for line in r.aiter_lines():
                     if not line.startswith("data:") or line.strip() == "data: [DONE]":
@@ -185,7 +189,8 @@ class OpenAICompatible:
     async def generate_json(self, prompt: str, schema: type[BaseModel], system: str | None = None) -> BaseModel:
         instruction = f"Reply with JSON only, matching this schema:\n{json.dumps(schema.model_json_schema())}"
         raw = await self.generate(prompt, f"{system}\n\n{instruction}" if system else instruction)
-        return schema.model_validate(extract_json(raw))
+        # Reasoning models (Qwen on Groq) think out loud in <think> tags before the JSON.
+        return schema.model_validate(extract_json(re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL)))
 
     async def ping(self) -> tuple[str, str]:
         try:
@@ -290,6 +295,10 @@ def build(impl: str, model: str, params: dict[str, Any] | None, env: dict[str, s
     if impl == "gemini":
         return OpenAICompatible(env.get("GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai"),
                                 model, env.get("GOOGLE_API_KEY"))
+    if impl == "groq":
+        return OpenAICompatible(env.get("GROQ_BASE_URL", "https://api.groq.com/openai/v1"), model,
+                                env.get("GROQ_API_KEY"), timeout_s=float(params.get("timeout_s", 60)), name="groq",
+                                max_tokens=params.get("max_tokens"), temperature=params.get("temperature"))
     if impl == "stub":
         return Stub()
     raise LLMUnavailable(f"no generator for implementation {impl!r}")

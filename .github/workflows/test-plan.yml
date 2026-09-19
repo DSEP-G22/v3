@@ -1,0 +1,63 @@
+name: test-plan
+
+# The master test plan (docs/TEST-PLAN.md) end to end on a GitHub runner: the published images
+# for a tag, on a throwaway Postgres (compose.test.yaml), never the production database.
+# Logs, JUnit XML, k6 summaries and screenshots are uploaded as the run's artifact.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Image tag to test (latest, or sha-<7> from a release)"
+        default: latest
+  schedule:
+    - cron: "30 20 * * 0"   # Monday 02:00 in Sri Lanka
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      V3_TAG: ${{ inputs.tag || 'latest' }}
+      OUT: reports/ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+
+      - name: A .env for the test stack
+        # Real models when the keys exist; without them drafting uses the offline stub and
+        # triage falls back to its distilled model.
+        env:
+          OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: |
+          cp .env.example .env
+          impl=stub; [ -n "$OLLAMA_API_KEY" ] && impl=ollama
+          sed -i "s|^BETTER_AUTH_SECRET=.*|BETTER_AUTH_SECRET=$(openssl rand -base64 32)|;
+                  s|^OLLAMA_BASE_URL=.*|OLLAMA_BASE_URL=https://ollama.com|;
+                  s|^LANKA_LLM_IMPL=.*|LANKA_LLM_IMPL=$impl|;
+                  s|^MODEL_CPUS=.*|MODEL_CPUS=$(nproc)|" .env
+          for k in OLLAMA_API_KEY GOOGLE_API_KEY GROQ_API_KEY; do
+            grep -v "^$k=" .env > .env.tmp && printf '%s=%s\n' "$k" "${!k}" >> .env.tmp && mv .env.tmp .env
+          done
+
+      - name: Images
+        run: COMPOSE_FILE=compose.yaml:compose.test.yaml docker compose pull --quiet
+
+      - name: Browser
+        working-directory: web
+        run: npm ci --no-audit --no-fund && npx playwright install --with-deps chromium
+
+      - name: The plan
+        run: bash scripts/test-plan.sh
+
+      - if: always()
+        run: docker compose -f compose.yaml -f compose.test.yaml logs --no-color --tail 300 > "$OUT/logs/zz-compose.txt" 2>&1 || true
+
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-plan-${{ github.run_number }}
+          path: reports/ci

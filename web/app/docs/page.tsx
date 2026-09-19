@@ -61,7 +61,7 @@ export default function Docs() {
           </ul>
         </nav>
 
-        <article className="max-w-3xl space-y-10">
+        <article className="min-w-0 max-w-3xl space-y-10 [overflow-wrap:anywhere]">
           <Section id="overview" title="Overview">
             <p>
               Lanka Link is a telecom operator with a support system that reads every request against the customer&apos;s

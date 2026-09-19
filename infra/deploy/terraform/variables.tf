@@ -13,7 +13,7 @@ variable "region" {
 variable "instance_type" {
   description = "The models need memory more than cores: NLLB, Whisper and the embedding models are all resident"
   type        = string
-  default     = "t3.xlarge" # 4 vCPU, 16 GB
+  default     = "m6i.xlarge" # 4 vCPU, 16 GB, not burstable: the models use CPU on every message
 }
 
 variable "disk_gb" {

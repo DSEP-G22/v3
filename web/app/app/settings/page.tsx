@@ -9,8 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { forgetToken } from "@/lib/api";
-import { authClient, signOut, useSession } from "@/lib/auth-client";
+import { signOutTo } from "@/components/role-gate";
+import { authClient, useSession } from "@/lib/auth-client";
 
 const LANGUAGES = [
   { value: "en", label: "English" },
@@ -95,11 +95,7 @@ export default function SettingsPage() {
       </Card>
       <Button
         variant="outline"
-        onClick={async () => {
-          await signOut();
-          forgetToken();
-          router.replace("/");
-        }}
+        onClick={() => signOutTo(router, "/")}
       >
         Sign out
       </Button>
