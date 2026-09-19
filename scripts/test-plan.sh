@@ -38,8 +38,15 @@ want() { [[ " $STEPS " == *" $1 "* ]]; }
 want unit && step 01-unit bash scripts/test-all.sh
 
 if want stack; then
-  # --wait reports business-sim (no health check by design) as an error; the smoke test decides.
-  step 02-stack bash -c 'docker compose up -d --wait >/dev/null 2>&1; docker compose ps --format "table {{.Service}}\t{{.Status}}" && bash scripts/smoke.sh'
+  # --wait gives up early on business-sim (no health check by design), and the edge answers
+  # /healthz before anything behind it is up, so wait for the catalogue and a page through it.
+  step 02-stack bash -c 'docker compose up -d --wait >/dev/null 2>&1
+    for i in $(seq 120); do
+      curl -fs "$LANKA_URL/api/public/plans" >/dev/null && curl -fs "$LANKA_URL/sign-in" >/dev/null && break
+      sleep 5
+    done
+    docker compose ps --format "table {{.Service}}\t{{.Status}}" && bash scripts/smoke.sh &&
+      curl -fsS -o /dev/null -w "ok  catalogue through the edge (%{http_code})\n" "$LANKA_URL/api/public/plans"'
 fi
 
 if want system; then

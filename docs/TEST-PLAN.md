@@ -1,10 +1,11 @@
 # Lanka Link v3: Master Test Plan
 
-Version 1.0
+Version 2.0
 
 | Date | Version | Description | Author |
 | --- | --- | --- | --- |
 | 19 Sep 2026 | 1.0 | First master test plan: covers the whole v3 system through its edge. | DSEP Group 22 |
+| 20 Sep 2026 | 2.0 | Isolated test stack, one-command runner and workflow, mobile suite, Groq triage, production read-only load test, monitoring. | DSEP Group 22 |
 
 ---
 
@@ -52,13 +53,15 @@ properties and to leave a regression fence behind each one.
 | auth (Better Auth, Node) | Us, on a third-party library | Sessions, sign-in throttling, role claims |
 | inquiry | Us | The write the customer waits for; attachment storage |
 | orchestrator | Us | Stage budgets, revisions, fan-in, the case record |
-| triage, grounding, response, knowledge | Us | What the reply may say, and the policy that holds it back |
+| triage (Groq or the distilled TriageModel) | Us, on Groq | Customer priority; must fall back when the model is slow or rate limited |
+| grounding, response, knowledge | Us | What the reply may say, and the policy that holds it back |
 | translation (NLLB-200 600M, CTranslate2) | Third-party model, our wrapper | Numbers, scripts, Sinhala conjuncts, fallback |
 | audio (faster-whisper small) | Third-party model, our wrapper | Language detection, the 30 s budget |
 | image (ONNX router classifier) | Ours, trained | Optional evidence; must not block the pipeline |
 | business, payments, business-sim | Us | The ledger the reply quotes |
 | control | Us | Live model rebinding without a restart |
-| web (Next.js) | Us | Every screen, and the wall between customer and back office |
+| web (Next.js) | Us | Every screen on desktop and on a phone, and the wall between customer and back office |
+| Monitoring (Prometheus, Grafana, exporters) | Us, on third-party tools | The operators' view of the VPS |
 | Neon Postgres, TimescaleDB, MinIO, NATS, Valkey | Third party | Durability, round trip cost, message redelivery |
 | compose stack and its overlays | Us | Every deployment shape the project ships |
 | Deployment (Ansible, Terraform, GitHub Actions) | Us | A push to main has to reach the server |
@@ -76,13 +79,23 @@ Everything is tested through the interface a real user or a real operator has: t
 where a technique below says so. That choice costs some precision and buys the only thing that
 matters here, which is that a passing suite means the product works, not that a function does.
 
+**Where the tests run.** Development and production share one Neon database, so nothing that writes
+runs against it. `compose.test.yaml` runs the complete stack on a throwaway Postgres, built from
+scratch by the same migration and seed production uses; the resilience tests stop and start its
+containers only. Production is exercised read only (`load/browse.js`).
+
+**One command, in version control.** `bash scripts/test-plan.sh` runs every level below on the test
+stack and keeps the evidence (logs, JUnit XML, k6 summaries, screenshots) in `reports/<date>/`. The
+GitHub workflow `test-plan.yml` runs the same script on demand or weekly and uploads that folder.
+CI's end to end job uses the same stack on every push.
+
 Four levels, each with its own command:
 
 | Level | What it covers | Command | Needs |
 | --- | --- | --- | --- |
 | Unit and contract | Pure logic: policy, fusion, confidence, translation guards, architecture rules | `bash scripts/test-all.sh` | Nothing |
 | System | Function, access control, data integrity, performance, configuration | `uv run pytest tests/system -q` | The stack running |
-| Browser | Screens, navigation, the customer and back office wall | `cd web && npx playwright test` | The stack running |
+| Browser | Screens, navigation, the customer and back office wall, every page on a 375 px phone | `cd web && npx playwright test` | The stack running |
 | Scenario and load | The headline case end to end, hot model swap, sustained load | `scripts/demo_flow.py`, `scripts/verify_hot_swap.py`, `scripts/load.sh` | The stack running |
 
 ### 3.1 Testing Techniques and Types
@@ -162,13 +175,16 @@ product:
   (subscriber references, OLT, circuit ids, "grounding", "bundle", "LLM", "triage", "confidence",
   "null", "undefined", "NaN", and the em dash).
 - Session persistence: a reload keeps the session and the landing page says who is signed in;
-  signing out ends it.
+  signing out ends it and lands on the website.
+- Mobile (`web/e2e/mobile.spec.ts`, project `mobile`): 26 pages across every role at 375 x 812 with
+  touch. A page fails if it scrolls sideways, and the message names the element that sticks out;
+  each page is kept as a screenshot for a person to review.
 
 **Oracles.** Self-verifying through roles and accessible names rather than CSS selectors, so a test
 breaks when the meaning changes and not when the styling does. Visual appearance is out of scope
 for automation and is reviewed by hand.
 
-**Required tools.** Playwright (Chromium), `web/e2e/*.spec.ts`.
+**Required tools.** Playwright (Chromium, desktop and a Pixel 7 profile narrowed to 375 px), `web/e2e/*.spec.ts`.
 
 **Success criteria.** Every major screen is opened by a test, and the customer immersion check
 covers every customer page.
@@ -219,7 +235,13 @@ build plan: the acknowledgement p50 under 300 ms and p95 under 800 ms, the overv
 
 **Oracles.** k6 thresholds, which fail the run by exit code.
 
-**Required tools.** `scripts/load.sh` (k6 locally, or the grafana/k6 image).
+A second scenario, `load/browse.js`, is read only and safe on production: 20 concurrent users
+(ramped over a minute, held for three) loading the landing page, the catalogue and a signed-in
+customer's overview, billing and tickets, with page p95 under 2 s and API p95 under 1.5 s. The
+Grafana dashboard is watched during the run.
+
+**Required tools.** `scripts/load.sh` (k6 locally, or the grafana/k6 image); `SCRIPT=load/browse.js`
+for the production scenario.
 
 **Success criteria.** Zero failed requests, and the latency thresholds met once the database is in
 the same region as the application.
@@ -266,6 +288,8 @@ and that a restarted service rejoins on its own.
 - audio stopped: the message is still accepted.
 - grounding stopped: the model map reports it down rather than claiming health.
 - translation restarted: the map reports it up again with no other action.
+- the triage language model fails, times out (2 s) or is rate limited: the distilled TriageModel
+  scores the case instead, and its reasons say why (unit tests force each path).
 
 **Oracles.** Self-verifying: the case exists, the draft exists, and the map's status field.
 
@@ -286,7 +310,9 @@ tries to run it.
 
 **Technique.**
 
-- `docker compose config -q` for each overlay: base, lite, CI, GPU and production.
+- `docker compose config -q` for each overlay: base, lite, CI, GPU, production, test, CI with test,
+  and production with monitoring.
+- The whole stack starts from an empty database on every run of the plan.
 - The mlops profile must add both Airflow and MLflow.
 - Every variable the compose files read must exist in `.env.example`, so a fresh deployment cannot
   start and then fail at runtime on a missing key.
@@ -315,18 +341,18 @@ conversation, not a missing branch:
 
 | Technique | Where | Count |
 | --- | --- | --- |
-| Unit and contract | `packages`, `services/*/tests`, `tests/architecture` | 128 tests, 2 Node tests, 6 module self-checks |
+| Unit and contract | `packages`, `services/*/tests`, `tests/architecture` | 131 tests, 2 Node tests, 6 module self-checks |
 | Data and database integrity | `tests/system/test_data_integrity.py` | 8 |
 | Function | `tests/system/test_functional.py` | 6, plus 2 scenario scripts |
 | Access control | `tests/system/test_access_control.py` | 15 |
 | Performance | `tests/system/test_performance.py` | 8 |
-| Configuration | `tests/system/test_configuration.py` | 7 |
+| Configuration | `tests/system/test_configuration.py` | 10 |
 | Failover and recovery | `tests/system/test_resilience.py` | 4 |
-| User interface | `web/e2e` | 11 |
-| Load | `load/ack.js` | 1 scenario, 3 thresholds |
+| User interface | `web/e2e` | 16 (11 desktop, 5 mobile covering 26 pages) |
+| Load | `load/ack.js`, `load/browse.js` | 2 scenarios, 7 thresholds |
 
-CI runs everything that needs no containers on every pull request, and the full system, browser
-and load suites on main when the Neon and auth secrets are present.
+CI runs everything that needs no containers on every pull request, and the end to end job (the
+CI stack on the test database: smoke, hot swap, scenario, browser, load) on every push.
 
 ---
 
@@ -334,8 +360,9 @@ and load suites on main when the Neon and auth secrets are present.
 
 | Risk | Impact | What we do about it |
 | --- | --- | --- |
-| The database is in Ohio and the users are in Sri Lanka | About 320 ms per round trip, which is most of every page timing and the whole reason the load thresholds fail | `scripts/neon-move.sh` moves it to Singapore; until then the page budgets are set against the current region and the load thresholds are recorded as failing for a known reason |
-| Tests run against a shared Neon branch | A failed run can leave data behind; two runs at once interfere | Tests append rather than mutate, personas are separated by role, and CI uses its own Neon branch |
+| The database is far from the server | Every round trip is in every page timing | Moved to Singapore (46 ms from Colombo); production is measured separately from the test stack |
+| Tests writing into production data | Test tickets, suspended accounts and load in the live database | Every writing test runs on `compose.test.yaml`; only the read-only scenario touches production |
+| External model capacity | Groq's free tier allows 8,000 tokens a minute; Ollama Cloud drafts about eight a minute | Triage falls back to its own model; a missed draft leaves the case with the agent, never loses it |
 | The drafting model is a cloud LLM | An outage or a 503 fails the draft stage, which looks like a product defect | The binding has a fallback and a circuit breaker; the held message names both errors; `verify_hot_swap.py` proves the switch works |
 | Model behaviour is not deterministic | The same message does not produce the same words twice | Tests assert on structure and on facts (script, numbers, citations), never on wording |
 | Measurements come from a development laptop | The numbers are not a server benchmark | Every figure in the results says where it was taken |

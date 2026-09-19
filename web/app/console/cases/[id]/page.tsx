@@ -118,7 +118,7 @@ export default function CasePage() {
             {data.customer} <span className="font-normal text-muted-foreground">{c.id}</span>
           </h1>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Badge variant="secondary">{department(c.department)}</Badge>
           <Badge variant="outline">Priority {priority(c.priority_level, c.band)}</Badge>
           <PriorityPair customer={data.grounding?.customer_priority ?? null} provider={data.grounding?.provider_priority ?? null} />
