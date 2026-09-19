@@ -273,8 +273,8 @@ services:
     environment:
       INQUIRY_URL: http://inquiry:8000
       TRANSLATE_URL: http://translation:8000
-      OMP_NUM_THREADS: "4"
-    cpus: 4
+      OMP_NUM_THREADS: "${MODEL_CPUS:-4}"
+    cpus: ${MODEL_CPUS:-4}
     restart: unless-stopped
 
   image:
@@ -290,9 +290,9 @@ services:
     image: ghcr.io/${GHCR_OWNER:-dsep-g22}/lanka-link-v3-translation:${V3_TAG:-latest}
     build: { context: ., dockerfile: services/translation/Dockerfile }
     environment:
-      OMP_NUM_THREADS: "4"
+      OMP_NUM_THREADS: "${MODEL_CPUS:-4}"
       LANKA_TR_BACKEND: ${LANKA_TR_BACKEND:-auto}
-    cpus: 4
+    cpus: ${MODEL_CPUS:-4}
     restart: unless-stopped
 
   triage:
