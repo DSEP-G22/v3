@@ -42,6 +42,7 @@
         dest: "{{ root }}"
         version: "{{ branch }}"
         force: true
+      register: checkout
 
     - name: The .env beside it, readable only by root
       template:
@@ -56,6 +57,15 @@
       command: "{{ compose }} pull --quiet"
       args: { chdir: "{{ root }}" }
       changed_when: true
+
+    # Compose mounts the Caddyfile as a single file. Git replaces changed files rather than
+    # editing them, and a running container keeps the file it started with, so the edge only
+    # sees a new Caddyfile after a restart. Compose cannot tell: its own config did not change.
+    - name: Restart the edge when the checkout changed its config
+      command: "{{ compose }} restart edge"
+      args: { chdir: "{{ root }}" }
+      when: checkout.changed
+      failed_when: false  # the first deploy has no edge yet
 
     - name: Start, and wait for every health check
       command: "{{ compose }} up -d --wait --remove-orphans"
