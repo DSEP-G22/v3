@@ -6,6 +6,8 @@ failures are not "no token" but "the wrong role" and "another customer's row".
 
 from __future__ import annotations
 
+import time
+
 import pytest
 
 CUSTOMER_FORBIDDEN = ["/api/console/cases", "/api/console/ping", "/api/admin/models", "/api/lab/requests"]
@@ -35,10 +37,14 @@ def test_each_role_reaches_its_own_surface(agent, admin, operator):
 
 def test_a_customer_cannot_read_another_customers_ticket(amara, ravi):
     """Tenant isolation: ids are guessable, the rows behind them are not shared."""
-    mine = amara.get("/api/app/tickets").raise_for_status().json()["tickets"]
-    theirs = ravi.get("/api/app/tickets").raise_for_status().json()["tickets"]
-    if not mine or not theirs:
-        pytest.skip("both personas need at least one ticket")
+    def tickets(who, name):
+        rows = who.get("/api/app/tickets").raise_for_status().json()["tickets"]
+        if not rows:  # a fresh database: open one, so the check never silently skips
+            who.post("/api/app/messages", data={"text": f"isolation check for {name} {time.time()}"}).raise_for_status()
+            rows = who.get("/api/app/tickets").raise_for_status().json()["tickets"]
+        return rows
+
+    mine, theirs = tickets(amara, "amara"), tickets(ravi, "ravi")
     assert ravi.get(f"/api/app/tickets/{mine[0]['id']}").status_code in (403, 404)
     assert amara.get(f"/api/app/tickets/{theirs[0]['id']}").status_code in (403, 404)
 

@@ -25,6 +25,7 @@ test("opening a ticket is acknowledged and shows progress", async ({ page }) => 
   await page.getByRole("button", { name: "Open ticket" }).click();
   // The acknowledgement is the ticket page itself: the pipeline runs behind it.
   await expect(page).toHaveURL(/\/app\/tickets\/\w/, { timeout: 15_000 });
-  await expect(page.getByText(text)).toBeVisible();
+  // The message itself; the ticket's heading repeats it as the subject.
+  await expect(page.getByRole("paragraph").filter({ hasText: text })).toBeVisible();
   await expect(page.getByText("Waiting on us")).toBeVisible();
 });

@@ -19,7 +19,7 @@ export LANKA_URL="${LANKA_URL:-http://localhost:8080}"
 export COMPOSE_PATH_SEPARATOR=":"
 export COMPOSE_FILE="${COMPOSE_FILE:-compose.yaml:compose.test.yaml}"
 mkdir -p "$OUT/logs" "$OUT/screens/mobile" "$OUT/screens/terminal"
-: > "$OUT/summary.tsv"
+touch "$OUT/summary.tsv"
 failed=0
 
 # step <name> <command...>: run it, keep its output, record pass or fail and how long it took.
@@ -28,7 +28,10 @@ step() {
   local log="$OUT/logs/$name.log" start=$SECONDS
   echo "== $name: $*" | tee "$log"
   if "$@" 2>&1 | tee -a "$log"; then status=PASS; else status=FAIL; failed=1; fi
-  printf '%s\t%s\t%ss\n' "$name" "$status" "$((SECONDS - start))" | tee -a "$OUT/summary.tsv"
+  # A rerun of one step (STEPS=system) replaces that step's line and keeps the others.
+  { grep -v "^$name	" "$OUT/summary.tsv" || true; printf '%s\t%s\t%ss\n' "$name" "$status" "$((SECONDS - start))"; } \
+    | sort > "$OUT/summary.tmp" && mv "$OUT/summary.tmp" "$OUT/summary.tsv"
+  grep "^$name	" "$OUT/summary.tsv"
 }
 want() { [[ " $STEPS " == *" $1 "* ]]; }
 

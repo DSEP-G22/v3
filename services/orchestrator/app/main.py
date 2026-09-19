@@ -152,7 +152,10 @@ async def stage(name: str, ev: dict[str, Any], case_id: str, rev: int, body: dic
                           stage=name, case_id=case_id, revision=rev, via="service" if url else "stub") as run:
             async with asyncio.timeout(BUDGET_S[name]):
                 if url:
-                    r = await http.post(f"{url}/run", json=body, headers=tracing.headers())
+                    # The budget is the limit: the client's own 30 s read timeout cut every draft
+                    # slower than that, although drafting is allowed 60 s.
+                    r = await http.post(f"{url}/run", json=body, headers=tracing.headers(),
+                                        timeout=httpx.Timeout(BUDGET_S[name] + 1, connect=3.0))
                     r.raise_for_status()
                     out = r.json()
                 else:
@@ -416,10 +419,13 @@ async def cases(tab: str = "open", origin: str = "customer", limit: int = 100, q
     where = TABS.get(tab, TABS["open"])
     # A work queue is oldest first: the customer who has waited longest is served first. History
     # is newest first, because otherwise the hundred row cap hides the case that just opened.
-    order = "opened_at DESC" if tab == "all" else "opened_at"
+    # History ignores priority too: sorted by it first, a burst of urgent cases pushed a new normal
+    # one past the cap all the same.
+    order = ("opened_at DESC" if tab == "all"
+             else "closed_at IS NOT NULL, priority_level DESC NULLS LAST, opened_at")
     rows = await rt.pool.fetch(
         f"""SELECT * FROM cases."case" WHERE origin = $1 AND {where} AND ($3 = '' OR id ILIKE $3 OR summary ILIKE $3)
-            ORDER BY closed_at IS NOT NULL, priority_level DESC NULLS LAST, {order} LIMIT $2""",
+            ORDER BY {order} LIMIT $2""",
         origin, max(1, min(limit, 500)), f"%{q}%" if q else "",
     )
     counts = await rt.pool.fetchrow(
