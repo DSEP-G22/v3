@@ -26,3 +26,8 @@
 		reverse_proxy web:3000
 	}
 }
+
+# Inside the compose network only (8080 is not published): the container health check.
+:8080 {
+	respond /healthz "ok" 200
+}
