@@ -18,7 +18,7 @@ export LANKA_URL="${LANKA_URL:-http://localhost:8080}"
 # its own Postgres, never the shared Neon database.
 export COMPOSE_PATH_SEPARATOR=":"
 export COMPOSE_FILE="${COMPOSE_FILE:-compose.yaml:compose.test.yaml}"
-mkdir -p "$OUT/logs" "$OUT/screens/mobile" "$OUT/screens/terminal"
+mkdir -p "$OUT/logs" "$OUT/screens/mobile" "$OUT/screens/desktop" "$OUT/screens/terminal"
 touch "$OUT/summary.tsv"
 failed=0
 
@@ -55,7 +55,7 @@ if want system; then
 fi
 
 if want browser; then
-  step 04-browser bash -c "cd web && SHOTS_DIR='$ROOT/$OUT/screens/mobile' PLAYWRIGHT_JUNIT_OUTPUT_NAME='$ROOT/$OUT/junit-browser.xml' npx playwright test --reporter=list,junit"
+  step 04-browser bash -c "cd web && SHOTS_DIR='$ROOT/$OUT/screens' PLAYWRIGHT_JUNIT_OUTPUT_NAME='$ROOT/$OUT/junit-browser.xml' npx playwright test --reporter=list,junit"
 fi
 
 if want scenario; then

@@ -34,19 +34,21 @@ PROD = "https://172-197-200-110.sslip.io"
 
 def collect(run: Path) -> None:
     """Copy what the report quotes out of a run directory (reports/ is not committed)."""
-    (EV / "terminal").mkdir(parents=True, exist_ok=True)
-    (EV / "mobile").mkdir(parents=True, exist_ok=True)
-    (EV / "logs").mkdir(parents=True, exist_ok=True)
+    for d in ("terminal", "mobile", "desktop", "logs"):
+        (EV / d).mkdir(parents=True, exist_ok=True)
     for name in ("summary.tsv", "junit-system.xml", "junit-browser.xml", "load-ack.json"):
         if (run / name).exists():
             shutil.copy2(run / name, EV / name)
     for f in (run / "logs").glob("*.log"):
         shutil.copy2(f, EV / "logs" / f.name)
-    # Phone pages are photographs of a screen, not line art: JPEG keeps the repository small.
+    # Screenshots are photographs of a screen, not line art: JPEG keeps the repository small.
     from PIL import Image as _I
-    for f in (run / "screens" / "mobile").glob("*.png"):
-        im = _I.open(f).convert("RGB")
-        im.resize((im.width // 2, im.height // 2), _I.LANCZOS).save(EV / "mobile" / f"{f.stem}.jpg", quality=82, optimize=True)
+    for kind, scale in (("mobile", 2), ("desktop", 1)):
+        for f in (run / "screens" / kind).glob("*.png"):
+            im = _I.open(f).convert("RGB")
+            if scale > 1:
+                im = im.resize((im.width // scale, im.height // scale), _I.LANCZOS)
+            im.save(EV / kind / f"{f.stem}.jpg", quality=82, optimize=True)
 
 
 def excerpts() -> None:
@@ -72,7 +74,7 @@ def sheet(names: list[str], out: Path, crop_css: int = 760) -> Path | None:
     """Phone screenshots side by side, the top of each page, as one figure."""
     tiles = []
     for n in names:
-        p = next((q for q in (EV / "mobile" / f"{n}.jpg", EV / "mobile" / f"{n}.png") if q.exists()), None)
+        p = screen("mobile", n)
         if p:
             im = Image.open(p).convert("RGB")
             scale = im.width / 375
@@ -87,6 +89,11 @@ def sheet(names: list[str], out: Path, crop_css: int = 760) -> Path | None:
         canvas.paste(t, (16 + i * 316, 16))
     canvas.save(out, optimize=True)
     return out
+
+
+def screen(kind: str, name: str) -> Path | None:
+    """A captured screen, whichever format it was kept in."""
+    return next((q for q in (EV / kind / f"{name}.jpg", EV / kind / f"{name}.png") if q.exists()), None)
 
 
 def junit(path: Path, group) -> Counter:
@@ -336,16 +343,26 @@ def build() -> None:
         "overflow causes themselves (a header whose hidden class lost to the button's own display, a grid child "
         "without min-width, oversize key caps). The run also found D12: signing out of the customer area landed on "
         "the sign-in page instead of the website.")
+    r.p("The screenshots below are the product in dark appearance, which is what a phone or a "
+        "desktop set to dark shows; the suites capture both form factors on every run.")
     before = HERE / "evidence" / "mobile-before-sheet.png"
     if before.exists():
-        r.image(before, "Figure 4: Before, on production: the customer menu shows two of six items; the inbox is cut off.", width=6.3)
+        r.image(before, ("Figure 4: Before the changes, on production (light appearance): the customer menu shows two of "
+                              "six items, and the inbox is cut off."), width=6.3)
     s1 = sheet(["customer-home", "customer-billing", "customer-new-ticket", "customer-usage"], EV / "mobile-sheet-customer.png")
     if s1:
         r.image(s1, "Figure 5: After, customer screens at 375 px, with the bottom tab bar.", width=6.3)
     s2 = sheet(["console-inbox", "admin-models", "sim-network", "landing"], EV / "mobile-sheet-staff.png")
     if s2:
         r.image(s2, "Figure 6: After, the agent inbox as cards, the model map as a list, the network map, the landing page.", width=6.3)
-    r.image(EV / "terminal" / "04-browser.png", "Figure 7: Browser tests, desktop and mobile projects.")
+    for name, cap in (("console-inbox", "Figure 7: The agent console on a desktop browser, dark."),
+                      ("admin-models", "Figure 8: The model map, where every stage is verified and rebound."),
+                      ("sim-network", "Figure 9: The simulated network an operator breaks things on."),
+                      ("customer-home", "Figure 10: The customer's home screen on a desktop browser.")):
+        shot = screen("desktop", name)
+        if shot:
+            r.image(shot, cap, width=6.1)
+    r.image(EV / "terminal" / "04-browser.png", "Figure 11: Browser tests, desktop and mobile projects.")
 
     # 3.1.4
     r.h3("Performance Profiling")
@@ -375,7 +392,7 @@ def build() -> None:
         r.p("The local stages (translation, account prefetch, grounding) take milliseconds. The three stages that "
             "call an external language model (triage, diagnosis, drafting) dominate, and they are where capacity "
             "ends, as the load test shows.")
-    r.image(EV / "terminal" / "system-performance.png", "Figure 8: Performance budgets, from the full run.")
+    r.image(EV / "terminal" / "system-performance.png", "Figure 12: Performance budgets, from the full run.")
 
     # 3.1.5
     r.h3("Load Testing")
@@ -410,7 +427,7 @@ def build() -> None:
             ["Acknowledgement p95", ms(a.get("p(95)")), "800 ms", "Pass" if a.get("p(95)", 1e9) < 800 else "Fail"],
             ["Overview p50", ms(o.get("med")), "250 ms", "Pass" if o.get("med", 1e9) < 250 else "Fail"],
         ], widths=[1.8, 1.7, 1.6, 1.0])
-        r.image(EV / "terminal" / "07-load.png", "Figure 9: k6 on the write path: every threshold met, no failed request.")
+        r.image(EV / "terminal" / "07-load.png", "Figure 13: k6 on the write path: every threshold met, no failed request.")
     if stats.get("triage_split"):
         t = stats["triage_split"]
         r.p(f"**Behind the acknowledgement, the pipeline under that burst.** Every one of the {t['total']} cases was "
@@ -435,9 +452,9 @@ def build() -> None:
             ["API p50 / p95", f"{ms(api_.get('med'))} / {ms(api_.get('p(95)'))}", "p95 under 1.5 s", "Pass" if api_.get("p(95)", 1e9) < 1500 else "Fail"],
         ], widths=[1.6, 2.3, 1.4, 0.8])
         if (EV / "terminal" / "extra-load-production.png").exists():
-            r.image(EV / "terminal" / "extra-load-production.png", "Figure 10: k6 against production, read only.")
+            r.image(EV / "terminal" / "extra-load-production.png", "Figure 14: k6 against production, read only.")
         if (EV / "grafana-load.png").exists():
-            r.image(EV / "grafana-load.png", "Figure 11: The production dashboard during the read-only load test.", width=6.5)
+            r.image(EV / "grafana-load.png", "Figure 15: The production dashboard during the read-only load test.", width=6.5)
         if stats.get("prod_note"):
             r.p(stats["prod_note"])
 
@@ -471,7 +488,7 @@ def build() -> None:
         "database neither persona had a ticket yet; a security test that silently skips on every clean install is a "
         "hole, so it now creates its own tickets. The seeded demo passwords are public in the repository and still "
         "active on the public site: recorded as a risk in section 5.")
-    r.image(EV / "terminal" / "system-access_control.png", "Figure 12: Access control tests, from the full run.")
+    r.image(EV / "terminal" / "system-access_control.png", "Figure 16: Access control tests, from the full run.")
 
     # 3.1.7
     r.h3("Failover and Recovery Testing")
@@ -498,7 +515,7 @@ def build() -> None:
     r.p(f"**Result: {rs} of {rs + count(sysc, 'resilience', 'failed')} passed.**"
         + (f" Under the load burst the triage fallback carried {stats['triage_split']['model']} cases with no triage "
            "failure." if stats.get("triage_split") else ""))
-    r.image(EV / "terminal" / "system-resilience.png", "Figure 13: Failover and recovery tests, from the full run.")
+    r.image(EV / "terminal" / "system-resilience.png", "Figure 17: Failover and recovery tests, from the full run.")
 
     # 3.1.8
     r.h3("Configuration Testing")
@@ -520,7 +537,7 @@ def build() -> None:
     cf = count(sysc, "configuration", "passed")
     r.p(f"**Result: {cf} of {cf + count(sysc, 'configuration', 'failed')} passed.** The clean install is also where "
         "D10 and D11 were found.")
-    r.image(EV / "terminal" / "system-configuration.png", "Figure 14: Configuration tests.", width=5.8)
+    r.image(EV / "terminal" / "system-configuration.png", "Figure 18: Configuration tests.", width=5.8)
 
     # 3.2 ---------------------------------------------------------------------------------------
     r.h2("Model Selection and Evaluation")
@@ -655,7 +672,8 @@ def build() -> None:
     r.p("The test effort delivers the following, all in the repository or produced by one command:")
     r.bullets([
         "Test logs and JUnit XML for every run (`reports/<date>/`, or the GitHub Actions artifact).",
-        "User interface screenshots of every page on a phone, kept by the mobile suite.",
+        "User interface screenshots of every page, on a phone and on a desktop browser, kept by "
+        "the browser suites on every run.",
         "Load test summaries from k6, for the isolated write path and for production.",
         "The production monitoring stack and its Grafana dashboard template (`infra/monitoring`).",
         "The model selection benchmarks, their results and figures (`model testing/results`).",
@@ -721,7 +739,7 @@ def build() -> None:
          "The Ollama Cloud key is rejected (401), Gemini refuses the server's region, and the Groq key is not in the secret store",
          "**Open, needs the owner**: set GROQ_API_KEY (Groq answers from the server) or refresh the Ollama key"],
     ], widths=[0.45, 1.1, 1.6, 1.8, 1.45])
-    r.image(EV / "terminal" / "01-unit.png", "Figure 15: Unit, contract and architecture tests, lint and typecheck.")
+    r.image(EV / "terminal" / "01-unit.png", "Figure 19: Unit, contract and architecture tests, lint and typecheck.")
 
     r.h2("Reporting on Test Coverage")
     r.p("Coverage is reported by requirement rather than by line, because the risk in this product is a missing "
@@ -753,7 +771,7 @@ def build() -> None:
         "edge, and the certificate expiry. Alert rules cover a service or the site going down, the certificate, "
         "memory, disk, CPU and error rate.")
     if (EV / "grafana-overview.png").exists():
-        r.image(EV / "grafana-overview.png", "Figure 16: The production dashboard (Grafana at /grafana).", width=6.5)
+        r.image(EV / "grafana-overview.png", "Figure 20: The production dashboard (Grafana at /grafana).", width=6.5)
 
     # 5 -----------------------------------------------------------------------------------------
     r.h1("Risks, Dependencies, Assumptions, and Constraints")

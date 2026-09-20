@@ -10,8 +10,14 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
   projects: [
-    { name: "chromium", use: { ...devices["Desktop Chrome"] }, testIgnore: /mobile\.spec/ },
-    // A phone-sized Chromium (Pixel 7 touch, narrowed to a 375 wide phone), so no WebKit download is needed.
-    { name: "mobile", use: { ...devices["Pixel 7"], viewport: { width: 375, height: 812 } }, testMatch: /mobile\.spec/ },
+    { name: "chromium", use: { ...devices["Desktop Chrome"] }, testIgnore: /(mobile|screens)\.spec/ },
+    // A phone-sized Chromium (Pixel 7 touch, narrowed to a 375 wide phone), so no WebKit download is
+    // needed. Dark, because that is how the product looks on a phone set to dark, and what the
+    // report shows.
+    { name: "mobile", use: { ...devices["Pixel 7"], viewport: { width: 375, height: 812 }, colorScheme: "dark" },
+      testMatch: /mobile\.spec/ },
+    // Desktop screenshots for the report; no assertions of its own.
+    { name: "desktop", use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 }, colorScheme: "dark" },
+      testMatch: /screens\.spec/ },
   ],
 });

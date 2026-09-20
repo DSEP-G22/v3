@@ -4,7 +4,7 @@ import { persona, signIn, STAFF } from "./helpers";
 
 // Every screen at phone width: nothing may scroll sideways, and each page is kept as a
 // screenshot for the test report (SHOTS_DIR, default test-results/screens/mobile).
-const SHOTS = process.env.SHOTS_DIR ?? "test-results/screens/mobile";
+const SHOTS = `${process.env.SHOTS_DIR ?? "test-results/screens"}/mobile`;
 
 async function check(page: Page, path: string, name: string) {
   await page.goto(path);

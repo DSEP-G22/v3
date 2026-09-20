@@ -79,11 +79,24 @@ jobs:
 
   gates:
     runs-on: ubuntu-latest
+    env:
+      GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
-      # The gitleaks CLI directly: gitleaks-action needs a paid license on organisation repos.
-      - run: docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.28.0 git /repo --no-banner --redact
+      # The organisation's gitleaks licence is in GITLEAKS_LICENSE. Without it (a fork, say) the
+      # CLI runs instead, which scans the same history and needs no licence.
+      - name: gitleaks
+        if: env.GITLEAKS_LICENSE != ''
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: "false"
+          GITLEAKS_ENABLE_SUMMARY: "true"
+      - name: gitleaks (no licence configured)
+        if: env.GITLEAKS_LICENSE == ''
+        run: docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.28.0 git /repo --no-banner --redact
 
   compose:
     runs-on: ubuntu-latest
