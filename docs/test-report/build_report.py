@@ -37,8 +37,15 @@ def collect(run: Path) -> None:
     for d in ("terminal", "mobile", "desktop", "logs"):
         (EV / d).mkdir(parents=True, exist_ok=True)
     for name in ("summary.tsv", "junit-system.xml", "junit-browser.xml", "load-ack.json"):
-        if (run / name).exists():
-            shutil.copy2(run / name, EV / name)
+        if not (run / name).exists():
+            continue
+        shutil.copy2(run / name, EV / name)
+        if name.endswith(".json"):
+            # k6 exports setup_data, which holds the token the scenario signed in with. A summary
+            # written before scripts/load.sh learned to strip it must not come back in here.
+            d = json.loads((EV / name).read_text(encoding="utf-8"))
+            if d.pop("setup_data", None) is not None:
+                (EV / name).write_text(json.dumps(d, indent=2) + "\n", encoding="utf-8")
     for f in (run / "logs").glob("*.log"):
         shutil.copy2(f, EV / "logs" / f.name)
     # Screenshots are photographs of a screen, not line art: JPEG keeps the repository small.

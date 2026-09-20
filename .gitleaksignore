@@ -5,3 +5,6 @@
 # the history scan honest without rewriting a commit that is already deployed.
 2d9edbaa223c119a0cc513889279cd3905b9aadf:docs/test-report/evidence/load-ack.json:jwt:139
 2d9edbaa223c119a0cc513889279cd3905b9aadf:docs/test-report/evidence/load-browse.json:jwt:138
+# The same token came back with be254e7: building the report copied the run's raw k6
+# summary in again. build_report.py's collect() strips setup_data now as well.
+be254e7e92e053451a775d59b21022b9fce40538:docs/test-report/evidence/load-ack.json:jwt:139
