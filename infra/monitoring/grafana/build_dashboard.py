@@ -151,7 +151,9 @@ panels.append({"type": "alertlist", "title": "Alerts", "id": nid(), "gridPos": {
 
 dash = {"uid": "lanka-link-vps", "title": "Lanka Link: VPS and services", "tags": ["lanka-link", "vps"],
         "timezone": "browser", "schemaVersion": 39, "version": 1, "editable": True, "graphTooltip": 1,
-        "refresh": "30s", "time": {"from": "now-3h", "to": "now"}, "templating": {"list": []},
+        # Auto-refresh off by default: 31 panels every 30 s is real work for a 2 vCPU box, and a
+        # refresh cancels queries that have not finished. Turn it on from the time picker.
+        "refresh": "", "time": {"from": "now-1h", "to": "now"}, "templating": {"list": []},
         "annotations": {"list": []}, "panels": panels,
         "description": "The production VPS: host resources, every container, each service's health check and the edge. "
                        "Provisioned from infra/monitoring/grafana/dashboards in the repo."}
