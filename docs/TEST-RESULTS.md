@@ -1,125 +1,115 @@
 # Lanka Link v3: Test Evaluation Summary
 
-Run of 19 Sep 2026, against the plan in `docs/TEST-PLAN.md`.
+Run of 20 Sep 2026, against the plan in `docs/TEST-PLAN.md`. The written report built from this
+run, with screenshots, is `docs/test-report/`.
 
-**Where it ran.** The full compose stack on the development laptop (Windows 11, Docker Desktop),
-all sixteen services plus both models resident, database on Neon in **us-east-2 (Ohio)**, about
-320 ms per round trip from the laptop. The drafting model was `gpt-oss:120b-cloud` through Ollama,
-with Gemini as the fallback binding. These are development-machine figures, not a server
-benchmark.
+**Where it ran.** `bash scripts/test-plan.sh` on the development laptop (Windows 11, Docker
+Desktop, 16 cores, 7.9 GB given to Docker): the full stack, all sixteen services with both models
+resident, on the **isolated test database** (`compose.test.yaml`), built from nothing by the same
+migration and seed production uses. Drafting and diagnosis ran on Ollama Cloud `gpt-oss:120b` and
+`20b`, triage on Groq `qwen/qwen3.8-27b`, translation on NLLB-200. The previous run (19 Sep) used
+the shared Neon database; nothing that writes does that any more.
 
 ## 1. Summary
 
-| Technique | Suite | Result |
-| --- | --- | --- |
-| Unit and contract | `scripts/test-all.sh` | **Pass.** 128 tests, 2 Node tests, 6 module self-checks, lint and types clean |
-| Data and database integrity | `tests/system/test_data_integrity.py` | **Pass.** 8 of 8 |
-| Function | `tests/system/test_functional.py` | **Pass.** 6 of 6 |
-| Security and access control | `tests/system/test_access_control.py` | **Pass.** 15 of 15 |
-| Performance profiling | `tests/system/test_performance.py` | **Pass.** 8 of 8 |
-| Configuration | `tests/system/test_configuration.py` | **Pass.** 7 of 7 |
-| Failover and recovery | `tests/system/test_resilience.py` | **Pass.** 4 of 4 after fixing D5 and D9 (3 of 4 on the first run) |
-| User interface | `web/e2e` (Playwright, Chromium) | **Pass.** 11 of 11 |
-| Scenario: headline case | `scripts/demo_flow.py` | **Pass.** Cites payment and outage; Sinhala reply delivered |
-| Scenario: hot model swap | `scripts/verify_hot_swap.py` | **Pass** |
-| Load | `scripts/load.sh` (k6) | **Zero errors, latency thresholds failed.** See section 3; the cause is the database region |
+| Step | Executed | Result | Time |
+| --- | --- | --- | --- |
+| Unit and contract (`scripts/test-all.sh`) | 131 tests, 2 Node tests, 6 self-checks, lint, types | **Pass** | 18 s |
+| Stack up and smoke (from an empty database) | 25 containers | **Pass** | 59 s |
+| System (`tests/system`, resilience on) | 51 tests | **Pass** | 102 s |
+| Browser (`web/e2e`, desktop and mobile) | 16 tests, 26 pages on a phone | **Pass** | 90 s |
+| Scenario: headline case (`demo_flow.py --strict`) | 1 | **Pass** | 32 s |
+| Scenario: hot model swap (`verify_hot_swap.py`) | 1 | **Pass** | 1 s |
+| Load, write path (`load/ack.js`) | 300 tickets in 60 s, 602 requests | **Pass**, every threshold met | 62 s |
 
-The final run of the whole system suite, with the destructive resilience tests switched on
-(`LANKA_RESILIENCE=1`): **48 passed, 0 skipped, 0 failed**, in 3 min 17 s.
-
-Nine defects were found and all nine were fixed in this iteration. Separately, the load latency
-thresholds still fail; that needs the database move, not a code fix.
+**199 test cases, 0 failed, 0 skipped.** Evidence (logs, JUnit XML, k6 summaries, screenshots of
+every phone page and of each terminal step) is in `reports/2026-09-20-final/`, and the same run
+can be produced by anyone with `bash scripts/test-plan.sh` or the `test-plan` GitHub workflow.
 
 ## 2. What was proven
 
-**It tells the truth.** The headline case ran end to end with a real model: Ravi (suspended, and
-inside a seeded outage) wrote in Sinhala, and the draft cited both the unpaid balance of
-LKR 8,450.00 and the line fault. The Sinhala reply that reached him carried the amount unchanged
-(රුපියල් 8,450.00). The function suite checks the same thing mechanically on every run: the
-digits in the English draft and in the translated reply must match, step numbers aside.
+**It tells the truth.** Ravi (suspended, inside a seeded outage) wrote in Sinhala. The draft cited
+both the unpaid balance and the fibre break, and the Sinhala reply carried the amount unchanged.
+The function suite checks the same mechanically: the digits in the English draft must equal the
+digits in the translated reply.
 
-**The wrong person does not see the wrong data.** No token: 401 on every route tried. A customer
-token on the console, admin and lab surfaces: 403. An agent token on admin and lab: 403. Each role
-on its own surface: 200. Two customers fetching each other's ticket: 404, never the row. A token
-with a tampered signature: 401. A wrong password: refused.
+**The wrong person does not see the wrong data.** 15 access control tests: no token 401, customer
+token on staff routes 403, agent token on admin routes 403, each role on its own surface 200, a
+tampered token 401, a wrong password refused. Two customers cannot read each other's tickets; on a
+fresh database that test now opens the tickets it needs instead of skipping.
 
-**It stays up when a part does not.** With audio stopped the message is still accepted. With
-grounding stopped the model map reports it down rather than healthy. A restarted translation
-service rejoins with no other action. With translation stopped the case still opens and still
-reaches a draft (after the fix for D5).
+**It stays up when a part does not.** With translation stopped the case still opens and still
+reaches a draft; with audio stopped the message is still accepted; with grounding stopped the map
+reports it down; a restarted service rejoins by itself. New: when the Groq triage model is slow,
+failing or rate limited, the distilled TriageModel scores the case and the reasons say so.
 
-**It is fast enough on a warm path.** Medians on a warm connection, single user:
+**It works on a phone.** Every page of all four surfaces at 375 px: no page scrolls sideways, the
+customer app has a bottom tab bar, the agent inbox is a card list and the model map is a list.
 
-| Route | Median | Budget |
-| --- | --- | --- |
-| `/api/app/billing`, `/api/app/plan`, `/api/app/notices` | 5 to 6 ms (cached) | 800 ms |
-| `/api/me` | 6 ms warm, 573 ms cold | 800 ms |
-| `/api/app/overview` | 6 ms warm, about 3.1 s cold | 1500 ms warm |
-| `/api/app/usage` | about 600 ms | 1200 ms |
-| Message acknowledgement | about 1.1 s | 2500 ms |
-| Console queue (needs approval) | about 2.6 s cold | 3000 ms |
-| Any page shell | 13 to 19 ms | none set |
+**It is fast on the paths people wait for.** Acknowledgement p50 9.7 ms and p95 14 ms under 5 new
+tickets a second (budgets 300 and 800 ms); account overview p50 4.8 ms (budget 250 ms); 0 failed
+requests out of 602. These are against the local test database, so they measure the code, not the
+network; production figures are in the report.
 
-## 3. Load
+## 3. Load and capacity
 
-k6, 5 inquiries a second for one minute, up to 20 virtual users:
+k6, 5 new tickets a second for one minute, 20 virtual users, every ticket running the full
+pipeline:
 
 | Metric | Result | Threshold | Verdict |
 | --- | --- | --- | --- |
-| Requests | 602, **0 failed** | under 1 percent failed | Pass |
-| Checks | 601 of 601 | | Pass |
-| Acknowledgement p50 | 1.14 s | 300 ms | **Fail** |
-| Acknowledgement p95 | 2.4 s | 800 ms | **Fail** |
+| Requests | 602, 0 failed | under 1 percent | Pass |
+| Tickets opened | 300 in 60 s | | |
+| Acknowledgement p50 / p95 | 9.7 ms / 14.0 ms | 300 ms / 800 ms | Pass |
 | Overview p50 | 4.8 ms | 250 ms | Pass |
 
-The system held the rate with no errors. The acknowledgement is a gateway call plus an inquiry
-write, which is three sequential Neon round trips, and each one costs about 320 ms from here to
-Ohio. That is the whole of the 1.1 s median. The same three round trips to Singapore are about
-35 ms each, which puts the median near 150 ms, inside the threshold. The fix is the region move
-(`scripts/neon-move.sh`), not code, and this threshold is recorded as failing until that is done.
+Behind the acknowledgement, all 312 cases of the run were created and triaged. Triage used Groq
+for 45 of them (315 ms average) and its own model for 267, because Groq's free tier allows 8,000
+tokens a minute; no triage failed. The stages that call an external language model are where
+capacity ends: 290 diagnoses reached the 15 s budget and 285 drafts the 60 s budget, so those
+cases reached an agent without a proposed reply. Drafts that completed took 16.8 s at the median.
+The system fails safe (no message lost, no error shown), and about fifteen drafts a minute is the
+ceiling with the current model account.
 
-## 4. Defects found
+## 4. Defects found and fixed in this iteration
 
-| # | Found by | Defect | Cause | Fix |
-| --- | --- | --- | --- | --- |
-| D1 | Configuration | `LANKA_LLM_IMPL` and `LANKA_TR_BACKEND` are read by compose but missing from `.env.example` | Added to compose without updating the example | Both added to `.env.example` with their defaults |
-| D2 | Function (scenario) | A Sinhala reply ran two words together: "නමුත්‍රේඛා" for "නමුත් රේඛා" (but the line) | The conjunct repair joined any virama followed by ර or ය, including across a real word boundary | The repair now joins across a space only when the piece before is a bare consonant or an anusvara, or when what follows is a bare ර or ය; unit tests for both directions |
-| D3 | Function (scenario) | "සාමාන් ය" left broken after the D2 fix | The tighter rule refused a genuine break after a vowel sign | A lone ර or ය is never a word, so it is joined; unit test added |
-| D4 | User interface | The chat test opened `/app/support`, which no longer exists, and waited for a test id that nothing renders | Support moved to tickets; the test was never updated | Test rewritten against the real flow: open a ticket, land on it, see it waiting |
-| D5 | Failover and recovery | A newly opened case can be missing from the console's "All" tab | The list is ordered oldest first and capped at 100 rows, so once there are more than 100 cases the newest ones fall off the end | "All" is now newest first. The work queues ("Needs approval", "Open") stay oldest first, since the customer who has waited longest is served first |
-| D6 | Load | `scripts/load.sh` fails on Windows before k6 runs | Git Bash rewrites `/load` in the Docker volume argument into a Windows path | `MSYS_NO_PATHCONV=1` on the docker call |
-| D7 | System (all) | Test sessions fail with 429 when several open at once | Better Auth rate limits sign-in per address | The HTTP helper and the Playwright helper back off and retry |
-| D8 | User interface | The immersion test never finished | It waited for `networkidle`, which never arrives because the live updates stream stays open | Waits for content instead |
-| D9 | Failover and recovery | The translation outage test reported "no draft" although the product had written one (case LL-10946: translate failed after 3 s, the pipeline carried on, draft in 5.6 s) | The test took whichever case changed first, which could be another persona's case or a revision bump | The function and failover tests now find their case by the text of the message they sent |
+| # | Found by | Defect | Fix |
+| --- | --- | --- | --- |
+| D10 | Clean install | inquiry never starts on an empty database: a backfill read `inquiry.message` before the statement that creates it | Backfill moved after the table |
+| D11 | Clean install | The seed forced TLS on every database connection | TLS only when the connection string asks for it |
+| D12 | Browser | Signing out of the customer area landed on sign-in, not the website | One `signOutTo` helper; the role gate holds while leaving |
+| D13 | Reading the Sinhala reply | A conjunct split by a space ("මධ් යම") | **Open**: needs a word list to tell a split conjunct from a word boundary |
+| D14 | Groq triage | Every second call returned 429 | `max_tokens` and `temperature` per binding; Groq reserved its whole per-minute budget otherwise |
+| D15 | Browser (mobile) | `/plans` was empty after every deploy until the cache expired | Rendered per request with a one minute data cache |
+| D16 | Browser (mobile) | Four pages scrolled sideways; the customer menu hid four of six items | Bottom tab bar, card lists, and the overflow causes |
+| D17 | System (functional) | A new case could fall past the console's 100 row cap after a burst | The All tab is ordered by time alone (D5 was only half fixed) |
+| D18 | System (functional) | Drafts slower than 30 s were lost although drafting is allowed 60 s | Each stage call now times out at its own budget |
+| D19 | Scenario | A reply quoting an incident id (`INC-2026-0418`) or an ISO date was held as "a phone number" | A phone is ten or more digits standing alone |
+| D20 | Scenario | Markdown reached the customer (`**LKR 18,574.40**`) | `plain_text()` strips markdown after the stream is joined |
+| D21 | Test stack | `migrate` failed on a fresh volume | Postgres health checks go over TCP, not the socket the init server uses |
+| D22 | Production monitoring | cAdvisor saw no containers | v0.55.1: older builds cannot read Docker 29's containerd image store |
 
-D4, D6, D7, D8 and D9 were defects in the tests or the tooling, not in the product. They are listed
-because a suite that fails for its own reasons hides the product's failures.
-
-Also changed in this iteration, on request rather than as a defect: the em dash gate was removed
-from GitHub Actions and from `scripts/test-all.sh`. The runtime check that holds back a reply
-containing an em dash is unchanged.
+D19 also proved the compliance guard works: the same draft was correctly held for promising an
+outage credit the customer is not entitled to.
 
 ## 5. Gaps
 
-- **Speech in Sinhala and Tamil is not proven.** Every voice note run used English audio (about
-  5 s to transcribe inside the pipeline). A Sinhala clip is needed to close this.
-- **The load thresholds** stay red until the database is in Singapore (section 3).
-- **Chromium only.** Firefox and Safari were not run.
-- **Visual appearance** is not automated and was not reviewed in this run.
-- **Drafts can carry markdown emphasis.** One Sinhala reply in this run contained `8,450.00**`, left
-  over from bold markup in the model's English. Not a correctness defect (the amount is right), but
-  it is visible to the customer; stripping markdown before translation is the fix.
+- **Speech is proven in English only.** No Sinhala or Tamil voice sample has been run.
+- **Sinhala conjunct repair (D13)** is open.
+- **Chromium only**, on desktop and a 375 px phone profile.
+- **The write-path load test runs on a development machine.** Production is load tested read only.
+- **External model capacity** is the pipeline's ceiling (section 3), not yet addressed.
+- **The seeded demo passwords are public** and still work on the public site.
 - **The MLOps profile** (Airflow, MLflow) was not part of this run.
 
 ## 6. How to repeat this run
 
 ```bash
-bash scripts/test-all.sh                                        # no stack needed
-bash scripts/up.sh                                              # or up.ps1 on Windows
-uv run --with httpx python -m pytest tests/system -q
-LANKA_RESILIENCE=1 uv run --with httpx python -m pytest tests/system/test_resilience.py -q
-(cd web && npx playwright install chromium && npx playwright test)
-uv run --with httpx python scripts/demo_flow.py --strict
-uv run --with httpx python scripts/verify_hot_swap.py
-bash scripts/load.sh
+bash scripts/test-plan.sh                       # everything, on a throwaway database
+STEPS="system browser" bash scripts/test-plan.sh  # one part of it
+SCRIPT=load/browse.js LANKA_URL=https://<domain> bash scripts/load.sh   # read only, safe on production
 ```
+
+Or run the **test-plan** workflow from the Actions tab and download its artifact. The report is
+rebuilt from a run with `python docs/test-report/build_report.py --collect reports/<date>` and
+`powershell -File docs/test-report/export.ps1 docs/test-report/Lanka-Link-v3-Master-Test-Plan.docx`.

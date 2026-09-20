@@ -35,9 +35,10 @@ ROLES: dict[str, tuple[str, str, tuple[str, ...], str, str, dict[str, Any]]] = {
                   {"fallback": {"impl": "gemini", "model_version": "gemini-3.6-flash"}}),
     "llm_diagnose": ("reasoning", "Diagnose the fault from the message and retrieved procedures.",
                      ("ollama", "gemini", "groq", "rules", "stub"), "ollama", "gpt-oss:20b-cloud", {"think": "low"}),
-    # "model" is the distilled TriageModel in the triage service; an LLM reading falls back to it.
+    # "model" is the distilled TriageModel inside the triage service: the default, because it is
+    # free, offline and 20 ms. An LLM reading is selectable and falls back to the model.
     "llm_triage": ("triage", "Score how urgent the customer's message is (the customer side priority).",
-                   ("groq", "model", "ollama", "gemini"), "groq", "qwen/qwen3.8-27b", {"max_tokens": 600, "temperature": 0}),
+                   ("model", "groq", "ollama", "gemini"), "model", "triage_multitask", {"max_tokens": 600, "temperature": 0}),
     "mt_in": ("translation", "Translate what the customer wrote into English.",
               ("nllb", "google", "passthrough"), "nllb", "facebook/nllb-200-distilled-600M", {}),
     "mt_out": ("translation", "Translate the approved reply into the customer's language.",
@@ -205,7 +206,11 @@ async def probe(role: str, deep: bool = False) -> dict[str, Any]:
 
     b = await binding(role)
     started = time.perf_counter()
-    if not role.startswith("llm_") or b["impl"] in ("rules", "model"):
+    if b["impl"] in ("rules", "model"):
+        # Not an endpoint to ping: the reading comes from inside the service (the distilled
+        # TriageModel, or the rules). The stage's own check exercises it.
+        status, detail = "reachable", f"{b['model_version']} runs inside the service, not on a model endpoint."
+    elif not role.startswith("llm_"):
         status, detail = "unknown", "Probed through the service health check."
     else:
         try:
