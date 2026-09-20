@@ -1,0 +1,9 @@
+$ uv run pytest tests/system/test_data_integrity.py -v   (from the full run, 8 results)
+tests/system/test_data_integrity.py::test_an_unknown_id_is_a_clean_404[/api/app/tickets/LL-999999] PASSED [ 50%]
+tests/system/test_data_integrity.py::test_an_unknown_id_is_a_clean_404[/api/app/orders/00000000-0000-0000-0000-000000000000] PASSED [ 52%]
+tests/system/test_data_integrity.py::test_an_unknown_case_is_a_clean_404 PASSED [ 54%]
+tests/system/test_data_integrity.py::test_an_empty_message_is_refused PASSED [ 56%]
+tests/system/test_data_integrity.py::test_a_message_survives_the_round_trip PASSED [ 58%]
+tests/system/test_data_integrity.py::test_an_attachment_keeps_its_bytes PASSED [ 60%]
+tests/system/test_data_integrity.py::test_a_case_revision_only_moves_forward PASSED [ 62%]
+tests/system/test_data_integrity.py::test_the_bill_adds_up PASSED        [ 64%]

@@ -1,0 +1,37 @@
+== 02-stack: bash -c docker compose up -d --wait >/dev/null 2>&1
+    for i in $(seq 120); do
+      curl -fs "$LANKA_URL/api/public/plans" >/dev/null && curl -fs "$LANKA_URL/sign-in" >/dev/null && break
+      sleep 5
+    done
+    docker compose ps --format "table {{.Service}}\t{{.Status}}" && bash scripts/smoke.sh &&
+      curl -fsS -o /dev/null -w "ok  catalogue through the edge (%{http_code})\n" "$LANKA_URL/api/public/plans"
+SERVICE         STATUS
+audio           Up 56 seconds (healthy)
+auth            Up 43 seconds (healthy)
+blackbox        Up 55 seconds
+business        Up 35 seconds (healthy)
+business-sim    Up 35 seconds
+cadvisor        Up 55 seconds (healthy)
+control         Up 43 seconds (healthy)
+edge            Up 55 seconds (healthy)
+gateway         Up 11 seconds (healthy)
+grafana         Up 55 seconds
+grounding       Up 29 seconds (healthy)
+image           Up 56 seconds (healthy)
+inquiry         Up 43 seconds (healthy)
+knowledge       Up 37 seconds (healthy)
+minio           Up 56 seconds
+nats            Up 55 seconds (healthy)
+node-exporter   Up 55 seconds
+orchestrator    Up 17 seconds (healthy)
+payments        Up 43 seconds (healthy)
+prometheus      Up 56 seconds
+response        Up 23 seconds (healthy)
+testdb          Up 55 seconds (healthy)
+timescaledb     Up 55 seconds (healthy)
+translation     Up 55 seconds (healthy)
+triage          Up 55 seconds (healthy)
+valkey          Up 55 seconds (healthy)
+web             Up 6 seconds (healthy)
+ok  edge /healthz
+ok  catalogue through the edge (200)

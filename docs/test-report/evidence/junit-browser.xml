@@ -1,0 +1,42 @@
+<testsuites id="" name="" tests="16" failures="0" skipped="0" errors="0" time="87.9039">
+<testsuite name="auth.spec.ts" timestamp="2026-09-19T21:18:42.885Z" hostname="chromium" tests="4" failures="0" skipped="0" time="54.246" errors="0">
+<testcase name="an agent lands in the console and cannot open admin or sim" classname="auth.spec.ts" time="3.784">
+</testcase>
+<testcase name="an operator lands in the simulation panel" classname="auth.spec.ts" time="49.539">
+</testcase>
+<testcase name="a wrong password is refused in plain words" classname="auth.spec.ts" time="0.327">
+</testcase>
+<testcase name="sign up with email reaches onboarding" classname="auth.spec.ts" time="0.596">
+</testcase>
+</testsuite>
+<testsuite name="customer.spec.ts" timestamp="2026-09-19T21:18:42.885Z" hostname="chromium" tests="2" failures="0" skipped="0" time="13.787" errors="0">
+<testcase name="immersion: no customer page shows back office words" classname="customer.spec.ts" time="12.698">
+</testcase>
+<testcase name="opening a ticket is acknowledged and shows progress" classname="customer.spec.ts" time="1.089">
+</testcase>
+</testsuite>
+<testsuite name="staff.spec.ts" timestamp="2026-09-19T21:18:42.885Z" hostname="chromium" tests="5" failures="0" skipped="0" time="47.803" errors="0">
+<testcase name="the console queue opens a case with its draft and its evidence" classname="staff.spec.ts" time="3.316">
+</testcase>
+<testcase name="the models map draws every stage and opens one" classname="staff.spec.ts" time="14.804">
+</testcase>
+<testcase name="a customer is kept out of the staff areas" classname="staff.spec.ts" time="14.554">
+</testcase>
+<testcase name="the session survives a reload and shows on the landing page" classname="staff.spec.ts" time="0.886">
+</testcase>
+<testcase name="signing out ends the session" classname="staff.spec.ts" time="14.243">
+</testcase>
+</testsuite>
+<testsuite name="mobile.spec.ts" timestamp="2026-09-19T21:18:42.885Z" hostname="mobile" tests="5" failures="0" skipped="0" time="86.758" errors="0">
+<testcase name="public pages fit a phone" classname="mobile.spec.ts" time="15.085">
+</testcase>
+<testcase name="customer pages fit a phone" classname="mobile.spec.ts" time="16.755">
+</testcase>
+<testcase name="console fits a phone" classname="mobile.spec.ts" time="4.846">
+</testcase>
+<testcase name="admin fits a phone" classname="mobile.spec.ts" time="24.57">
+</testcase>
+<testcase name="simulation fits a phone" classname="mobile.spec.ts" time="25.502">
+</testcase>
+</testsuite>
+</testsuites>

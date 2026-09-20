@@ -1,0 +1,5 @@
+== 06-hot-swap: uv run --with httpx python scripts/verify_hot_swap.py
+before: ollama:gpt-oss:120b-cloud generation 3
+swapped: stub probes reachable in 1 ms
+restored: ollama:gpt-oss:120b-cloud generation 5
+hot swap OK

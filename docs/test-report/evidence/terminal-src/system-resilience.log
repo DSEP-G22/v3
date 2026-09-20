@@ -1,0 +1,5 @@
+$ uv run pytest tests/system/test_resilience.py -v   (from the full run, 4 results)
+tests/system/test_resilience.py::test_a_dead_translation_service_still_answers_the_customer PASSED [ 94%]
+tests/system/test_resilience.py::test_a_dead_audio_service_does_not_lose_the_ticket PASSED [ 96%]
+tests/system/test_resilience.py::test_the_edge_reports_a_stopped_dependency PASSED [ 98%]
+tests/system/test_resilience.py::test_a_restarted_service_is_healthy_again PASSED [100%]

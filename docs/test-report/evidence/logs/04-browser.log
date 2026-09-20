@@ -1,0 +1,22 @@
+== 04-browser: bash -c cd web && SHOTS_DIR='/d/DSEP22/v3/reports/2026-09-20-final/screens/mobile' PLAYWRIGHT_JUNIT_OUTPUT_NAME='/d/DSEP22/v3/reports/2026-09-20-final/junit-browser.xml' npx playwright test --reporter=list,junit
+
+Running 16 tests using 4 workers
+
+  ok  3 [chromium] › e2e\staff.spec.ts:5:5 › the console queue opens a case with its draft and its evidence (3.3s)
+  ok  2 [chromium] › e2e\auth.spec.ts:5:5 › an agent lands in the console and cannot open admin or sim (3.8s)
+  ok  1 [chromium] › e2e\customer.spec.ts:7:5 › immersion: no customer page shows back office words (12.7s)
+  ok  7 [chromium] › e2e\customer.spec.ts:20:5 › opening a ticket is acknowledged and shows progress (1.1s)
+  ok  4 [mobile] › e2e\mobile.spec.ts:33:5 › public pages fit a phone (15.1s)
+  ok  5 [chromium] › e2e\staff.spec.ts:17:5 › the models map draws every stage and opens one (14.8s)
+  ok  8 [mobile] › e2e\mobile.spec.ts:39:5 › customer pages fit a phone (16.8s)
+  ok  9 [chromium] › e2e\staff.spec.ts:27:5 › a customer is kept out of the staff areas (14.6s)
+  ok 11 [chromium] › e2e\staff.spec.ts:35:5 › the session survives a reload and shows on the landing page (886ms)
+  ok 10 [mobile] › e2e\mobile.spec.ts:52:5 › console fits a phone (4.8s)
+  ok 12 [chromium] › e2e\staff.spec.ts:43:5 › signing out ends the session (14.2s)
+  ok  6 [chromium] › e2e\auth.spec.ts:14:5 › an operator lands in the simulation panel (49.5s)
+  ok 14 [chromium] › e2e\auth.spec.ts:20:5 › a wrong password is refused in plain words (327ms)
+  ok 15 [chromium] › e2e\auth.spec.ts:28:5 › sign up with email reaches onboarding (596ms)
+  ok 13 [mobile] › e2e\mobile.spec.ts:64:5 › admin fits a phone (24.6s)
+  ok 16 [mobile] › e2e\mobile.spec.ts:72:5 › simulation fits a phone (25.5s)
+
+  16 passed (1.5m)

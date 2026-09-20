@@ -1,0 +1,7 @@
+$ uv run pytest tests/system/test_functional.py -v   (from the full run, 6 results)
+tests/system/test_functional.py::test_the_public_pages_need_no_account PASSED [ 66%]
+tests/system/test_functional.py::test_who_am_i_names_the_role PASSED     [ 68%]
+tests/system/test_functional.py::test_the_account_screens_carry_the_customers_own_record PASSED [ 70%]
+tests/system/test_functional.py::test_a_sinhala_message_becomes_a_case_with_a_draft PASSED [ 72%]
+tests/system/test_functional.py::test_the_conversation_keeps_what_was_said PASSED [ 74%]
+tests/system/test_functional.py::test_a_ticket_can_be_read_back_whole PASSED [ 76%]

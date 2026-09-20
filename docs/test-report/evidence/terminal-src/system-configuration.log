@@ -1,0 +1,11 @@
+$ uv run pytest tests/system/test_configuration.py -v   (from the full run, 10 results)
+tests/system/test_configuration.py::test_the_compose_file_is_valid[yaml] PASSED [ 31%]
+tests/system/test_configuration.py::test_the_compose_file_is_valid[yaml+lite] PASSED [ 33%]
+tests/system/test_configuration.py::test_the_compose_file_is_valid[yaml+ci] PASSED [ 35%]
+tests/system/test_configuration.py::test_the_compose_file_is_valid[yaml+gpu] PASSED [ 37%]
+tests/system/test_configuration.py::test_the_compose_file_is_valid[yaml+prod] PASSED [ 39%]
+tests/system/test_configuration.py::test_the_compose_file_is_valid[yaml+test] PASSED [ 41%]
+tests/system/test_configuration.py::test_the_compose_file_is_valid[yaml+ci+test] PASSED [ 43%]
+tests/system/test_configuration.py::test_the_compose_file_is_valid[yaml+prod+monitoring] PASSED [ 45%]
+tests/system/test_configuration.py::test_the_mlops_profile_adds_airflow_and_mlflow PASSED [ 47%]
+tests/system/test_configuration.py::test_every_variable_the_compose_file_reads_is_in_the_example PASSED [ 49%]

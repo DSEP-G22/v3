@@ -1,0 +1,9 @@
+$ uv run pytest tests/system/test_performance.py -v   (from the full run, 8 results)
+tests/system/test_performance.py::test_a_warm_account_screen_is_within_budget[/api/me-800] PASSED [ 78%]
+tests/system/test_performance.py::test_a_warm_account_screen_is_within_budget[/api/app/overview-1500] PASSED [ 80%]
+tests/system/test_performance.py::test_a_warm_account_screen_is_within_budget[/api/app/billing-800] PASSED [ 82%]
+tests/system/test_performance.py::test_a_warm_account_screen_is_within_budget[/api/app/plan-800] PASSED [ 84%]
+tests/system/test_performance.py::test_a_warm_account_screen_is_within_budget[/api/app/usage-1200] PASSED [ 86%]
+tests/system/test_performance.py::test_a_warm_account_screen_is_within_budget[/api/app/notices-800] PASSED [ 88%]
+tests/system/test_performance.py::test_the_acknowledgement_is_immediate PASSED [ 90%]
+tests/system/test_performance.py::test_the_console_queue_loads_within_budget PASSED [ 92%]

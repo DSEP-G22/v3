@@ -1,0 +1,63 @@
+== 03-system: env LANKA_RESILIENCE=1 uv run --with httpx --with pytest python -m pytest tests/system -v -p no:cacheprovider --junitxml=reports/2026-09-20-final/junit-system.xml
+============================= test session starts =============================
+platform win32 -- Python 3.12.11, pytest-9.1.1, pluggy-1.6.0 -- D:\DSEP22\v3\.venv\Scripts\python.exe
+rootdir: D:\DSEP22\v3
+configfile: pyproject.toml
+plugins: anyio-4.15.1, langsmith-0.13.0, asyncio-1.4.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 51 items
+
+tests/system/test_access_control.py::test_no_token_is_rejected[/api/me] PASSED [  1%]
+tests/system/test_access_control.py::test_no_token_is_rejected[/api/app/billing] PASSED [  3%]
+tests/system/test_access_control.py::test_no_token_is_rejected[/api/console/cases] PASSED [  5%]
+tests/system/test_access_control.py::test_no_token_is_rejected[/api/admin/models] PASSED [  7%]
+tests/system/test_access_control.py::test_a_customer_cannot_reach_staff_surfaces[/api/console/cases] PASSED [  9%]
+tests/system/test_access_control.py::test_a_customer_cannot_reach_staff_surfaces[/api/console/ping] PASSED [ 11%]
+tests/system/test_access_control.py::test_a_customer_cannot_reach_staff_surfaces[/api/admin/models] PASSED [ 13%]
+tests/system/test_access_control.py::test_a_customer_cannot_reach_staff_surfaces[/api/lab/requests] PASSED [ 15%]
+tests/system/test_access_control.py::test_an_agent_cannot_reach_admin_surfaces[/api/admin/models] PASSED [ 17%]
+tests/system/test_access_control.py::test_an_agent_cannot_reach_admin_surfaces[/api/admin/traces] PASSED [ 19%]
+tests/system/test_access_control.py::test_an_agent_cannot_reach_admin_surfaces[/api/lab/requests] PASSED [ 21%]
+tests/system/test_access_control.py::test_each_role_reaches_its_own_surface PASSED [ 23%]
+tests/system/test_access_control.py::test_a_customer_cannot_read_another_customers_ticket PASSED [ 25%]
+tests/system/test_access_control.py::test_a_tampered_token_is_rejected PASSED [ 27%]
+tests/system/test_access_control.py::test_sign_in_rejects_a_wrong_password PASSED [ 29%]
+tests/system/test_configuration.py::test_the_compose_file_is_valid[yaml] PASSED [ 31%]
+tests/system/test_configuration.py::test_the_compose_file_is_valid[yaml+lite] PASSED [ 33%]
+tests/system/test_configuration.py::test_the_compose_file_is_valid[yaml+ci] PASSED [ 35%]
+tests/system/test_configuration.py::test_the_compose_file_is_valid[yaml+gpu] PASSED [ 37%]
+tests/system/test_configuration.py::test_the_compose_file_is_valid[yaml+prod] PASSED [ 39%]
+tests/system/test_configuration.py::test_the_compose_file_is_valid[yaml+test] PASSED [ 41%]
+tests/system/test_configuration.py::test_the_compose_file_is_valid[yaml+ci+test] PASSED [ 43%]
+tests/system/test_configuration.py::test_the_compose_file_is_valid[yaml+prod+monitoring] PASSED [ 45%]
+tests/system/test_configuration.py::test_the_mlops_profile_adds_airflow_and_mlflow PASSED [ 47%]
+tests/system/test_configuration.py::test_every_variable_the_compose_file_reads_is_in_the_example PASSED [ 49%]
+tests/system/test_data_integrity.py::test_an_unknown_id_is_a_clean_404[/api/app/tickets/LL-999999] PASSED [ 50%]
+tests/system/test_data_integrity.py::test_an_unknown_id_is_a_clean_404[/api/app/orders/00000000-0000-0000-0000-000000000000] PASSED [ 52%]
+tests/system/test_data_integrity.py::test_an_unknown_case_is_a_clean_404 PASSED [ 54%]
+tests/system/test_data_integrity.py::test_an_empty_message_is_refused PASSED [ 56%]
+tests/system/test_data_integrity.py::test_a_message_survives_the_round_trip PASSED [ 58%]
+tests/system/test_data_integrity.py::test_an_attachment_keeps_its_bytes PASSED [ 60%]
+tests/system/test_data_integrity.py::test_a_case_revision_only_moves_forward PASSED [ 62%]
+tests/system/test_data_integrity.py::test_the_bill_adds_up PASSED        [ 64%]
+tests/system/test_functional.py::test_the_public_pages_need_no_account PASSED [ 66%]
+tests/system/test_functional.py::test_who_am_i_names_the_role PASSED     [ 68%]
+tests/system/test_functional.py::test_the_account_screens_carry_the_customers_own_record PASSED [ 70%]
+tests/system/test_functional.py::test_a_sinhala_message_becomes_a_case_with_a_draft PASSED [ 72%]
+tests/system/test_functional.py::test_the_conversation_keeps_what_was_said PASSED [ 74%]
+tests/system/test_functional.py::test_a_ticket_can_be_read_back_whole PASSED [ 76%]
+tests/system/test_performance.py::test_a_warm_account_screen_is_within_budget[/api/me-800] PASSED [ 78%]
+tests/system/test_performance.py::test_a_warm_account_screen_is_within_budget[/api/app/overview-1500] PASSED [ 80%]
+tests/system/test_performance.py::test_a_warm_account_screen_is_within_budget[/api/app/billing-800] PASSED [ 82%]
+tests/system/test_performance.py::test_a_warm_account_screen_is_within_budget[/api/app/plan-800] PASSED [ 84%]
+tests/system/test_performance.py::test_a_warm_account_screen_is_within_budget[/api/app/usage-1200] PASSED [ 86%]
+tests/system/test_performance.py::test_a_warm_account_screen_is_within_budget[/api/app/notices-800] PASSED [ 88%]
+tests/system/test_performance.py::test_the_acknowledgement_is_immediate PASSED [ 90%]
+tests/system/test_performance.py::test_the_console_queue_loads_within_budget PASSED [ 92%]
+tests/system/test_resilience.py::test_a_dead_translation_service_still_answers_the_customer PASSED [ 94%]
+tests/system/test_resilience.py::test_a_dead_audio_service_does_not_lose_the_ticket PASSED [ 96%]
+tests/system/test_resilience.py::test_the_edge_reports_a_stopped_dependency PASSED [ 98%]
+tests/system/test_resilience.py::test_a_restarted_service_is_healthy_again PASSED [100%]
+
+- generated xml file: D:\DSEP22\v3\reports\2026-09-20-final\junit-system.xml --
+======================= 51 passed in 101.12s (0:01:41) ========================

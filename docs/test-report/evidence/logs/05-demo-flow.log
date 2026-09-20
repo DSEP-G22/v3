@@ -1,0 +1,14 @@
+== 05-demo-flow: uv run --with httpx python scripts/demo_flow.py --strict
+1. suspend_account on SUB-100002: 422 (already suspended)
+2. Ravi wrote in Sinhala, acknowledged in 139 ms
+3. LL-10312 drafted (held) after 24 s:
+   Ravi, you said the internet has been down for two days and the internet LED is blinking irregularly. Because we have not received a photo of your router, we cannot identify the exact model to give you specific wiring steps. Please attach a picture of the back of the unit so we can guide you further. Our records show an active incident on the Colombo Central feeder that has cut the fibre serving your line, and the line is currently marked as down. In addition, your account is suspended due to an unpaid balance of LKR 18,574.40, which also prevents service from being delivered. Both issues must be resolved before the connection can be restored. Please settle the outstanding balance of LKR 18,574.40; once the payment is processed the suspension will be lifted and the service will be restored as soon as the network repair is completed.
+
+Lanka Link customer support
+   cites payment: True, cites outage: True
+4. agent approved
+   Ravi received after 29 s (Sinhala):
+   රවි, ඔයා කිව්වා ඉන්ටර්නෙට් අක්‍රිය වෙලා දවස් දෙකයි කියලා. ඉන්ටර්නේට් LED එක අක්‍රමිකව බැලුවා කියලා. අපිට ඔයාගේ රවුටරයේ ඡායාරූපයක් ලැබිලා නැති හින්දා අපිට හරියටම මොඩලය හඳුනාගන්න බැහැ. කරුණාකර ඒකකයේ පිටුපස ඡායාරූපයක් අමුණන්න එවිට අපට තව දුරටත් ඔබට මග පෙන්විය හැකිය. අපේ වාර්තා පෙන්නුම් කරනවා කොලොම්බෝ සෙන්ට් රල් ෆීඩර් එකේ ක්‍රියාකාරී සිද්ධියක් වෙලා තියෙනවා ඒකෙන් ඔයාගේ රේඛාවට සේවය කරන ෆයිබර් එක කපලා. මීට අමතරව, රුපියල් 18,574.40 ක නොගෙවූ ශේෂයක් හේතුවෙන් ඔබගේ ගිණුම අත්හිටුවන අතර එමඟින් සේවාව ලබා දීම වළක්වයි. සම්බන්ධතාවය යථා තත්වයට පත් කරන්න කලින් ප්‍රශ්න දෙකම විසඳිය යුතුයි. කරුණාකර රුපියල් 18,574.40 ක ශේෂය විසඳන්න; ගෙවීම සකස් කළ පසු අත්හිටුවීම ඉවත් කරනු ඇති අතර ජාල අළුත්වැඩියා කිරීම අවසන් වූ වහාම සේවාව නැවත ආරම්භ කරනු ඇත.
+
+Lanka Link customer support
+demo flow OK

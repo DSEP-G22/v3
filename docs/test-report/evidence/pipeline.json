@@ -1,0 +1,106 @@
+{
+  "triage": {
+    "model": "qwen/qwen3.8-27b",
+    "direct_ms": "about 240",
+    "models": [
+      [
+        "qwen/qwen3.8-27b",
+        "Yes",
+        "299 ms, 282 ms",
+        "Default: fastest and steady"
+      ],
+      [
+        "openai/gpt-oss-20b",
+        "Yes",
+        "702 ms, 512 ms",
+        "Selectable"
+      ],
+      [
+        "openai/gpt-oss-120b",
+        "Yes",
+        "694 ms, 566 ms",
+        "Selectable"
+      ],
+      [
+        "groq/compound-mini",
+        "Yes",
+        "989 ms, 861 ms",
+        "Selectable"
+      ],
+      [
+        "groq/compound",
+        "Yes",
+        "not measured",
+        "Selectable"
+      ]
+    ]
+  },
+  "triage_split": {
+    "total": 312,
+    "groq": 45,
+    "groq_ms": 315,
+    "model": 267
+  },
+  "diagnose_timeouts": 290,
+  "draft_failed": 285,
+  "draft_capacity": "fifteen",
+  "stages": [
+    [
+      "Translate in",
+      "done",
+      "311",
+      "5 ms",
+      "8 ms"
+    ],
+    [
+      "Account prefetch",
+      "done",
+      "312",
+      "6 ms",
+      "14 ms"
+    ],
+    [
+      "Triage",
+      "done",
+      "312",
+      "20 ms",
+      "282 ms"
+    ],
+    [
+      "Diagnose",
+      "done",
+      "22",
+      "12.7 s",
+      "14.8 s"
+    ],
+    [
+      "Diagnose",
+      "budget missed",
+      "290",
+      "15.0 s",
+      "15.0 s"
+    ],
+    [
+      "Grounding",
+      "done",
+      "311",
+      "9 ms",
+      "18 ms"
+    ],
+    [
+      "Draft",
+      "done",
+      "26",
+      "16.8 s",
+      "55.6 s"
+    ],
+    [
+      "Draft",
+      "budget missed",
+      "285",
+      "60.0 s",
+      "60.0 s"
+    ]
+  ],
+  "prod_note": "The server held 20 concurrent readers with no failed request while it was also running its own simulated traffic and the monitoring stack, on 2 vCPU and 7.9 GB. CPU sat near 49 percent and memory at 53 percent during the run, and the page p95 of 1.8 s is mostly the landing page, which is rendered per request. Writes were deliberately not load tested against production."
+}
