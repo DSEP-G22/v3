@@ -47,7 +47,7 @@ services:
       - timescale-data:/var/lib/postgresql/data
       - ./infra/timescale/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d telemetry"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d telemetry"]  # TCP: not the initdb server
       interval: 5s
       timeout: 3s
       retries: 30

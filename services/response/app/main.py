@@ -31,7 +31,7 @@ from lanka_common import bus, tracing
 from lanka_common.contracts import ContextBundle
 from lanka_common.db import POOLER_KWARGS, parse_neon_key
 from lanka_common.llm import LLMUnavailable, Stub, build
-from lanka_common.punctuation import normalise
+from lanka_common.punctuation import normalise, plain_text
 
 GROUNDING_URL = os.environ.get("GROUNDING_URL", "http://grounding:8000")
 CONTROL_URL = os.environ.get("CONTROL_URL", "http://control:8000")
@@ -266,7 +266,9 @@ async def _run(body: RunIn) -> dict[str, Any]:
         await emit(buffer)
 
     # Sentence splitting eats newlines; numbered repair steps go back on their own lines.
-    text_en = re.sub(r"\s+(?=\d{1,2}\.\s)", "\n", normalise(" ".join(p.strip() for p in parts))) + f"\n\n{SIGN_OFF}"
+    # plain_text after joining: a model's bold markers can straddle two streamed chunks.
+    text_en = re.sub(r"\s+(?=\d{1,2}\.\s)", "\n",
+                     plain_text(normalise(" ".join(p.strip() for p in parts)))) + f"\n\n{SIGN_OFF}"
     findings = policy.check_draft(text_en, bundle) + (stopped or [])
     decision = policy.finalise(pre, rules, findings)
     model = f"{rt.llm.name}:{rt.llm.model}"
@@ -342,7 +344,7 @@ async def decide(case_id: str, revision: int, d: Decide) -> dict[str, Any]:
                                  reasons = $4 WHERE case_id = $1 AND revision = $2""",
                               case_id, revision, d.actor, json.dumps([d.note or "Sent back."]))
         return {"status": "declined"}
-    text_en = normalise(d.text_en or row["text_en"])
+    text_en = plain_text(normalise(d.text_en or row["text_en"]))
     r = await http.get(f"{GROUNDING_URL}/bundles/{case_id}/{revision}")
     bundle = ContextBundle.model_validate(r.json())
     blocking = [f for f in policy.check_draft(text_en, bundle) if f["severity"] == "error"]

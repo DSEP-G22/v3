@@ -50,7 +50,8 @@ services:
     restart: unless-stopped
 
   cadvisor:
-    image: gcr.io/cadvisor/cadvisor:v0.52.1
+    # v0.55.1 or newer: older builds cannot read containers under Docker 29 (containerd image store).
+    image: gcr.io/cadvisor/cadvisor:v0.55.1
     command: ["--docker_only=true", "--housekeeping_interval=15s", "--store_container_labels=false",
               "--disable_metrics=advtcp,cpu_topology,disk,hugetlb,memory_numa,percpu,process,referenced_memory,resctrl,sched,tcp,udp"]
     privileged: true

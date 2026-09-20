@@ -37,6 +37,9 @@ Profiles:
   (`services/grounding/app/priority.py`). The queue sorts by the higher one.
 - **Customer side first.** The draft opens with what the customer reported on their own equipment
   (steps only from device guidance and procedures), then anything on our side.
+- **Triage model.** The customer side priority comes from Groq (`qwen/qwen3.8-27b` by default; gpt-oss
+  20b/120b and compound are selectable) or the distilled TriageModel, which also answers whenever Groq
+  is slow or rate limited.
 - **LLM.** Bindings are set live in `/admin/models`. The default is Ollama `gpt-oss:120b-cloud` via the
   host daemon (`OLLAMA_BASE_URL`), with the offline stub for CI.
 - **Tracing.** `LANGSMITH_TRACING=true` plus `LANGSMITH_API_KEY`: one trace per case revision, every stage
@@ -45,12 +48,24 @@ Profiles:
 ## Verify
 
 ```bash
+bash scripts/test-plan.sh                           # the whole test plan on a throwaway database, evidence in reports/<date>/
 scripts/test-all.sh                                 # unit, architecture, em dash, typecheck, no mock data
 uv run python scripts/verify_hot_swap.py            # rebinds llm_draft live and restores it
 uv run python scripts/demo_flow.py --strict         # the headline case through :8080
 scripts/e2e.sh                                      # Playwright, including the immersion scan
 scripts/load.sh                                     # k6 thresholds
+SCRIPT=load/browse.js LANKA_URL=https://... scripts/load.sh   # read-only load, safe on production
 ```
+
+`compose.test.yaml` runs the stack on its own Postgres: tests and load never touch the shared Neon
+database. The same plan runs in GitHub Actions (`test-plan` workflow). Plan and report:
+[docs/TEST-PLAN.md](docs/TEST-PLAN.md), [docs/test-report](docs/test-report).
+
+## Monitor
+
+Production runs `compose.monitoring.yaml` beside the stack: Prometheus, node-exporter, cAdvisor,
+blackbox probes and Grafana at `/grafana` with the provisioned dashboard **Lanka Link: VPS and
+services**. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) section 7.
 
 ## Images
 

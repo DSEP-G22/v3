@@ -53,3 +53,24 @@ def normalise_deep(value: Any) -> Any:
     if isinstance(value, tuple):
         return tuple(normalise_deep(v) for v in value)
     return value
+
+
+#: Markdown a model adds on its own. A customer reads the reply as plain text, so bold markers,
+#: code ticks, heading hashes and link syntax are stripped before it is stored or translated.
+_MD = (
+    (r"(?<!\*)\*\*([^*\n]+)\*\*(?!\*)", r"\1"),
+    (r"(?<!_)__([^_\n]+)__(?!_)", r"\1"),
+    (r"(?<![\w*])\*([^*\n]+)\*(?![\w*])", r"\1"),
+    (r"`([^`\n]+)`", r"\1"),
+    (r"(?m)^\s{0,3}#{1,6}\s+", ""),
+    (r"\[([^\]\n]+)\]\((?:[^)\n]*)\)", r"\1"),
+)
+
+
+def plain_text(text: str) -> str:
+    """The reply as the customer should see it: no markdown left in it."""
+    import re
+
+    for pattern, replacement in _MD:
+        text = re.sub(pattern, replacement, text)
+    return text

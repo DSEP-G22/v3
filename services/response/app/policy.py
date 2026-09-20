@@ -20,7 +20,8 @@ _REFUND_PROMISE = re.compile(
     r"\b(we will|we'll|you will receive|you'll get)\b[^.]{0,40}\b(refund|credit|compensation)\b", re.I)
 _GUARANTEE = re.compile(r"\b(guarantee(d)?|100%|never fail|always works|no matter what)\b", re.I)
 _GREETING = re.compile(r"^\s*(hi|hello|dear|good (morning|afternoon|evening))\b", re.I)
-_PII = ((re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+"), "email"), (re.compile(r"\b(?:\+?\d[\d\-\s]{7,}\d)\b"), "phone"),
+# A phone is ten or more digits standing alone: an incident id (INC-2026-0418) or a date is not one.
+_PII = ((re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+"), "email"), (re.compile(r"(?<![\w-])\+?(?:\d[\s-]?){9,13}\d(?![\w-])"), "phone"),
         (re.compile(r"\b(?:\d[ -]?){13,19}\b"), "card"), (re.compile(r"\b\d{9}[vVxX]\b|\b\d{12}\b"), "nic"))
 
 _OFFER_VERBS = ("arrange", "arranging", "book", "booking", "schedule", "scheduling", "send you", "send an",
@@ -124,4 +125,6 @@ if __name__ == "__main__":
     assert check_sentence("I will arrange an engineer for you.", set())
     assert not check_sentence("I will arrange an engineer for you.", {"schedule_technician_visit"})
     assert not check_sentence("Our engineers are working on it.", set())
+    assert not check_sentence("Incident INC-2026-0418 started on 2026-09-20.", set())
+    assert check_sentence("Call us on 077 123 4567.", set()) and check_sentence("Or +94 77 123 4567.", set())
     print("policy ok")
