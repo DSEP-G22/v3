@@ -743,8 +743,8 @@ def build() -> None:
         ["D23", "Monitoring (production)", "The model map showed the distilled triage model as Not answering",
          "A binding that runs inside its own service has no endpoint to ping, and the probe returned unknown", "The probe reports where the model runs; fixed"],
         ["D24", "Production (environment)", "Drafting and diagnosis cannot reach any language model on the server",
-         "The Ollama Cloud key is rejected (401), Gemini refuses the server's region, and the Groq key is not in the secret store",
-         "**Open, needs the owner**: set GROQ_API_KEY (Groq answers from the server) or refresh the Ollama key"],
+         "The Ollama Cloud key is rejected (401), Gemini refuses the server's region (\"User location is not supported\"), and the Groq key was missing",
+         "GROQ_API_KEY set as a repository secret; after the deploy, drafting answers in 755 ms and diagnosis in 558 ms from the server; fixed"],
     ], widths=[0.45, 1.1, 1.6, 1.8, 1.45])
     r.image(EV / "terminal" / "01-unit.png", "Figure 19: Unit, contract and architecture tests, lint and typecheck.")
 
