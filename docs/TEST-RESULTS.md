@@ -110,6 +110,5 @@ STEPS="system browser" bash scripts/test-plan.sh  # one part of it
 SCRIPT=load/browse.js LANKA_URL=https://<domain> bash scripts/load.sh   # read only, safe on production
 ```
 
-Or run the **test-plan** workflow from the Actions tab and download its artifact. The report is
-rebuilt from a run with `python docs/test-report/build_report.py --collect reports/<date>` and
-`powershell -File docs/test-report/export.ps1 docs/test-report/Lanka-Link-v3-Master-Test-Plan.docx`.
+Or run the **test-plan** workflow from the Actions tab and download its artifact. The written
+report for this run, with the logs it quotes, is in `docs/test-report/`.

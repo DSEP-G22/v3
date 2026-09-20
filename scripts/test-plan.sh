@@ -4,21 +4,21 @@
 #   bash scripts/test-plan.sh                 # everything, stack started from compose.test.yaml
 #   STEPS="system browser" bash scripts/test-plan.sh
 #
-# Evidence lands in reports/<date>/: one log per step, JUnit XML, k6 summaries, the mobile
-# screenshots and a PNG of every terminal log (for the written report). The same script runs in
+# Evidence lands in reports/<date>/: one log per step, JUnit XML, k6 summaries and the browser
+# screenshots (phone and desktop), which is what the written report quotes. The same script runs in
 # GitHub Actions (.github/workflows/test-plan.yml). Every step runs even when an earlier one
 # fails; the exit code is non-zero if any did.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 ROOT="$PWD"
 OUT="${OUT:-reports/$(date +%Y-%m-%d)}"
-STEPS="${STEPS:-unit stack system browser scenario load shots}"
+STEPS="${STEPS:-unit stack system browser scenario load}"
 export LANKA_URL="${LANKA_URL:-http://localhost:8080}"
 # Every docker compose call below, and the ones the resilience tests make, use the test overlay:
 # its own Postgres, never the shared Neon database.
 export COMPOSE_PATH_SEPARATOR=":"
 export COMPOSE_FILE="${COMPOSE_FILE:-compose.yaml:compose.test.yaml}"
-mkdir -p "$OUT/logs" "$OUT/screens/mobile" "$OUT/screens/desktop" "$OUT/screens/terminal"
+mkdir -p "$OUT/logs" "$OUT/screens/mobile" "$OUT/screens/desktop"
 touch "$OUT/summary.tsv"
 failed=0
 
@@ -65,12 +65,6 @@ fi
 
 if want load; then
   step 07-load env SUMMARY="$OUT/load-ack.json" bash scripts/load.sh
-fi
-
-if want shots; then
-  # Last, so it pictures every log above, including its own predecessors' failures.
-  (cd web && node scripts/term-shots.mjs "$ROOT/$OUT/logs" "$ROOT/$OUT/screens/terminal") >/dev/null 2>&1 \
-    || echo "terminal screenshots failed" >&2
 fi
 
 echo
