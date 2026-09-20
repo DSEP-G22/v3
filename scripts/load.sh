@@ -10,6 +10,21 @@ SCRIPT="${SCRIPT:-load/ack.js}"
 EMAIL="${EMAIL:-amara@customers.lankalink.example.lk}"
 PASSWORD="${SEED_CUSTOMER_PASSWORD:-Lanka#2026}"
 ARGS=(-e BASE="$BASE" -e EMAIL="$EMAIL" -e PASSWORD="$PASSWORD")
+# k6's exported summary carries setup_data, which holds the session token the scenario signed in
+# with. Strip it before the file is kept as evidence.
+strip_token() {
+  [ -n "${SUMMARY:-}" ] && [ -f "$SUMMARY" ] || return 0
+  "$PY" - "$SUMMARY" <<'EOF'
+import json, sys
+p = sys.argv[1]
+d = json.load(open(p, encoding="utf-8"))
+d.pop("setup_data", None)
+json.dump(d, open(p, "w", encoding="utf-8"), indent=2)
+EOF
+}
+PY=$(command -v python3 || command -v python)
+trap strip_token EXIT
+
 if command -v k6 >/dev/null; then
   k6 run "${ARGS[@]}" ${SUMMARY:+--summary-export "$SUMMARY"} "$SCRIPT"
 else

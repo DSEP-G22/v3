@@ -1,0 +1,7 @@
+# Two findings in the evidence committed with the test report (2d9edba): k6's exported
+# summary carried setup_data, which held the short-lived session token the load scenario
+# signed in with, for the public demo account amara. The value is removed from those files
+# and scripts/load.sh now strips setup_data, so it cannot recur. These fingerprints keep
+# the history scan honest without rewriting a commit that is already deployed.
+2d9edbaa223c119a0cc513889279cd3905b9aadf:docs/test-report/evidence/load-ack.json:jwt:139
+2d9edbaa223c119a0cc513889279cd3905b9aadf:docs/test-report/evidence/load-browse.json:jwt:138
