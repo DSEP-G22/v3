@@ -19,7 +19,7 @@ export function BinaryField() {
     const c = canvas.current!;
     const ctx = c.getContext("2d")!;
     const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const family = getComputedStyle(document.documentElement).getPropertyValue("--font-geist-mono").trim() || "monospace";
+    const family = getComputedStyle(document.documentElement).getPropertyValue("--font-vt323").trim() || "monospace";
     const ink = getComputedStyle(c).color;
     let w = 0;
     let h = 0;
@@ -75,7 +75,7 @@ export function BinaryField() {
       c.width = w * dpr;
       c.height = h * dpr;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx.font = `500 11px ${family}`;
+      ctx.font = `15px ${family}`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillStyle = ink;
@@ -110,6 +110,7 @@ export function BinaryField() {
     const onScroll = () => frame(0, false); // reduced motion: follow the scroll, nothing else moves
 
     resize();
+    void document.fonts.ready.then(resize); // the canvas picks up VT323 once it has loaded
     addEventListener("resize", resize);
     addEventListener("pointermove", move, { passive: true });
     if (!still) raf = requestAnimationFrame(loop);

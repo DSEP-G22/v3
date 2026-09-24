@@ -9,7 +9,8 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-app);
   --font-mono: var(--font-geist-mono);
-  --font-serif: var(--font-instrument-serif), Georgia, serif;
+  /* VT323: labels, figures and a single accent word. It sets small, so it is used a size up. */
+  --font-pixel: var(--font-vt323), var(--font-geist-mono), monospace;
   --font-heading: var(--font-app);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -62,7 +63,7 @@
 
 /* Violet primary, lilac surfaces, a light gold accent. */
 :root {
-  --font-app: var(--font-geist-sans), var(--font-noto-sinhala), var(--font-noto-tamil),
+  --font-app: var(--font-grotesk), var(--font-noto-sinhala), var(--font-noto-tamil),
     ui-sans-serif, system-ui, sans-serif;
   --background: oklch(0.992 0.004 300);
   --foreground: oklch(0.2 0.04 295);
@@ -246,6 +247,71 @@ body::before {
   background-clip: text;
   color: transparent;
   animation: var(--animate-shine);
+}
+
+/* A terminal label: VT323, upper case, a touch of tracking. Size it with a text utility. */
+@utility pixel-label {
+  font-family: var(--font-pixel);
+  line-height: 1;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/*
+ * A Gemini style glow box: a slow conic light runs round the border, with a soft halo outside. `data-glow="on"` (selected, verifying) brings it up; hover shows a hint.
+ */
+@property --glow-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+@keyframes glow-turn {
+  to { --glow-angle: 360deg; }
+}
+@layer components {
+.glow-box {
+  --glow: conic-gradient(from var(--glow-angle), var(--primary), var(--lilac), var(--gold), var(--primary) 55%, var(--chart-4), var(--primary));
+  transition: box-shadow 0.6s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.glow-box::before {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  border-radius: inherit;
+  background: var(--glow);
+  opacity: 0;
+  transition: opacity 0.6s cubic-bezier(0.32, 0.72, 0, 1);
+  animation: glow-turn 6s linear infinite;
+}
+/* The ring: the gradient shown only in the 1px border area. */
+.glow-box::before {
+  inset: -1px;
+  z-index: 1;
+  padding: 1px;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+}
+.glow-box:hover::before { opacity: 0.55; }
+.glow-box[data-glow="on"]::before { opacity: 1; }
+.glow-box[data-glow="on"] {
+  box-shadow:
+    -14px -6px 36px -14px color-mix(in oklch, var(--primary) 70%, transparent),
+    14px 8px 40px -14px color-mix(in oklch, var(--gold) 45%, transparent);
+}
+}
+@media (prefers-reduced-motion: reduce) {
+  .glow-box::before { animation: none; }
+}
+
+/*
+ * Entrance: [data-reveal] content is faded in by anime.js (components/fx/reveal.tsx). With
+ * scripting on, the first screen starts hidden so it does not flash; if the script never runs,
+ * it shows itself after a moment.
+ */
+@keyframes reveal-fallback { to { opacity: 1; } }
+@media (scripting: enabled) {
+  [data-reveal="now"] { opacity: 0; animation: reveal-fallback 0s 1.6s forwards; }
 }
 
 /* Horizontal carousels: native scroll snapping, no library. */

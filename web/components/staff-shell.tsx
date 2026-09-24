@@ -20,7 +20,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 
-import { LOGO_RATIO, LogoMark } from "@/components/logo";
+import { LOGO_RATIO, LogoIcon, LogoMark } from "@/components/logo";
 import { roleOf, signOutTo, type Role } from "@/components/role-gate";
 import {
   CommandDialog,
@@ -85,6 +85,8 @@ const WARM: Record<string, string[]> = {
 };
 
 const EASE = "duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]";
+/** The current page: a violet wash fading right, with a thin bar of light on its left edge. */
+const ACTIVE = "rounded-lg data-active:bg-linear-to-r data-active:from-primary/15 data-active:to-primary/0 data-active:text-foreground data-active:shadow-[inset_2px_0_0_var(--primary)] data-active:[&_svg]:text-primary";
 
 /**
  * The full logo when expanded, the mark alone when collapsed. The mark is the logo's left
@@ -182,7 +184,7 @@ export function StaffShell({ children, bar }: { children: ReactNode; bar?: React
         <SidebarContent>
           {GROUPS.filter((g) => g.roles.includes(role)).map((g) => (
             <SidebarGroup key={g.label}>
-              <SidebarGroupLabel>{g.label}</SidebarGroupLabel>
+              <SidebarGroupLabel className="pixel-label text-[14px] text-sidebar-foreground/50">{g.label}</SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu>
                   {g.items.map(({ href, label, icon: Icon }) => {
@@ -191,7 +193,7 @@ export function StaffShell({ children, bar }: { children: ReactNode; bar?: React
                       : path.startsWith(href);
                     return (
                       <SidebarMenuItem key={href}>
-                        <SidebarMenuButton isActive={active} tooltip={label} render={<Link href={href} />}>
+                        <SidebarMenuButton isActive={active} tooltip={label} render={<Link href={href} />} className={ACTIVE}>
                           <Icon />
                           <span className="whitespace-nowrap transition-opacity duration-300 group-data-[collapsible=icon]:opacity-0">{label}</span>
                         </SidebarMenuButton>
@@ -204,9 +206,15 @@ export function StaffShell({ children, bar }: { children: ReactNode; bar?: React
           ))}
         </SidebarContent>
         <SidebarFooter className="px-3 pb-4 text-sm">
-          <div className="min-w-0 max-h-12 overflow-hidden whitespace-nowrap transition-[max-height,opacity] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] group-data-[collapsible=icon]:max-h-0 group-data-[collapsible=icon]:opacity-0">
-            <p className="truncate font-medium">{data?.user.name}</p>
-            <p className="text-xs capitalize text-muted-foreground">{role}</p>
+          <div className="flex min-w-0 max-h-14 items-center gap-2.5 overflow-hidden rounded-xl border border-sidebar-border bg-sidebar-accent/40 p-2 whitespace-nowrap transition-[max-height,opacity,padding] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] group-data-[collapsible=icon]:max-h-0 group-data-[collapsible=icon]:border-0 group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:opacity-0">
+            <span aria-hidden className="relative grid size-8 shrink-0 place-items-center rounded-full bg-linear-to-br from-lilac via-primary to-[oklch(0.35_0.15_295)] text-sm font-semibold text-white">
+              {data?.user.name?.slice(0, 1).toUpperCase()}
+              <span className="absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full border-2 border-sidebar bg-success" />
+            </span>
+            <span className="min-w-0">
+              <span className="block truncate font-medium">{data?.user.name}</span>
+              <span className="pixel-label block text-[14px] text-muted-foreground">{role}</span>
+            </span>
           </div>
           <SidebarMenu>
             <SidebarMenuItem>
@@ -224,13 +232,20 @@ export function StaffShell({ children, bar }: { children: ReactNode; bar?: React
           </SidebarMenu>
         </SidebarFooter>
       </Sidebar>
-      <SidebarInset className="!bg-transparent text-sm">
-        <header className="sticky top-0 z-10 flex h-12 items-center gap-3 border-b bg-background/80 px-4 backdrop-blur">
+      <SidebarInset className="relative isolate !bg-transparent text-sm">
+        {/* A soft light from the top of the work area, as in Gemini: violet, a trace of gold. */}
+        <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-80 bg-[radial-gradient(50%_100%_at_30%_0%,color-mix(in_oklch,var(--primary)_12%,transparent),transparent),radial-gradient(40%_80%_at_85%_0%,color-mix(in_oklch,var(--gold)_7%,transparent),transparent)]" />
+        <header className="sticky top-0 z-10 flex h-14 items-center gap-3 border-b border-foreground/5 bg-background/60 px-3 backdrop-blur-xl md:px-5">
           <SidebarTrigger className="size-10 md:hidden" />
+          <LogoIcon className="size-7 shrink-0 md:hidden" />
           {bar}
-          <span className="ml-auto hidden text-xs text-muted-foreground sm:inline">Ctrl K to find a case</span>
+          {role !== "operator" && (
+            <span className="ml-auto hidden items-center gap-2 text-xs text-muted-foreground sm:flex">
+              <kbd className="pixel-label rounded-md border border-foreground/10 bg-muted/60 px-1.5 py-1 text-[14px]">Ctrl K</kbd> find a case
+            </span>
+          )}
         </header>
-        <main className="mx-auto w-full max-w-7xl flex-1 p-4 md:p-6">{children}</main>
+        <main className="mx-auto w-full max-w-7xl flex-1 p-4 md:p-6 lg:p-8">{children}</main>
       </SidebarInset>
       {role !== "operator" && <JumpToCase />}
     </SidebarProvider>

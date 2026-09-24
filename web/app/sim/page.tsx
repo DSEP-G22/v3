@@ -5,8 +5,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
-import { BentoIcon } from "@/components/bento-icon";
 import { FocusLayer, originOf, type Origin } from "@/components/fx/focus-layer";
+import { Count } from "@/components/fx/reveal";
 import { Sparkline } from "@/components/sparkline";
 import { StatusDot, type Tone } from "@/components/status-dot";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -102,12 +102,11 @@ function layout(exchanges: Exchange[]): { nodes: Node[]; edges: Edge[] } {
   return { nodes, edges };
 }
 
-function Stat({ label, value, icon, tone }: { label: string; value: number; icon: typeof ServerIcon; tone: string }) {
+function Stat({ label, value, icon: Icon, tone }: { label: string; value: number; icon: typeof ServerIcon; tone: string }) {
   return (
-    <div className="surface-3d relative isolate overflow-hidden rounded-2xl p-4 pl-5">
-      <BentoIcon icon={icon} className="-z-10" place="size-32 -right-6 -bottom-8" tone={tone} />
-      <p className="text-3xl font-semibold tabular-nums">{value}</p>
-      <p className="text-xs text-muted-foreground">{label}</p>
+    <div className="rounded-2xl border border-foreground/10 bg-card/60 p-4 backdrop-blur">
+      <p className="flex items-center gap-2 text-xs text-muted-foreground"><Icon className={cn("size-3.5", tone)} />{label}</p>
+      <p className="mt-3 font-pixel text-4xl leading-none"><Count value={value} /></p>
     </div>
   );
 }
@@ -188,15 +187,18 @@ export default function NetworkGraph() {
     return { k, x: el.width / 2 - ((el.width / 2 - v.x) * k) / v.k, y: el.height / 2 - ((el.height / 2 - v.y) * k) / v.k };
   });
 
-  // Hovering lights the path to the core and everything underneath.
+  // Hovering lights the path to the core and everything underneath; a selection keeps it lit
+  // while its window is open.
+  const picked = sel?.type === "node" ? sel.node.id : sel?.type === "edge" ? sel.edge.to : null;
+  const focus = hover ?? picked;
   const lit = useMemo(() => {
-    if (!hover) return null;
-    const set = new Set<string>([hover]);
-    for (let n = byId.get(hover); n?.parent; n = byId.get(n.parent)) set.add(n.parent);
+    if (!focus) return null;
+    const set = new Set<string>([focus]);
+    for (let n = byId.get(focus); n?.parent; n = byId.get(n.parent)) set.add(n.parent);
     const down = (id: string) => nodes.filter((n) => n.parent === id).forEach((c) => { set.add(c.id); down(c.id); });
-    down(hover);
+    down(focus);
     return set;
-  }, [hover, byId, nodes]);
+  }, [focus, byId, nodes]);
   const dim = (id: string) => lit !== null && !lit.has(id);
 
   async function act(name: string, body: Record<string, unknown>, done: string) {
@@ -222,11 +224,12 @@ export default function NetworkGraph() {
   };
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">Network</h1>
-          <p className="text-muted-foreground">Drag to move, scroll to zoom, hover to trace a path, click any node or link to act on it.</p>
+          <p className="pixel-label text-[15px] text-primary">Simulation</p>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight">Network</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Drag to move, scroll to zoom, hover to trace a path, click any node or link to act on it.</p>
         </div>
       </div>
 
@@ -240,12 +243,12 @@ export default function NetworkGraph() {
       <div className="relative z-20 flex flex-wrap items-center gap-3">
         <div className="relative w-full max-w-sm">
           <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a customer by name, email or SUB number"
-                 aria-label="Find a customer" className="bg-background/60 backdrop-blur" />
+                 aria-label="Find a customer" className="h-10 rounded-full bg-background/60 px-4 backdrop-blur" />
           {q.trim().length >= 2 && !!found.data?.subscribers.length && (
-            <ul className="absolute mt-1 w-full overflow-hidden rounded-xl border bg-popover/95 shadow-xl backdrop-blur">
+            <ul className="absolute mt-2 w-full overflow-hidden rounded-2xl border bg-popover/95 p-1 shadow-xl backdrop-blur-xl">
               {found.data.subscribers.map((s) => (
                 <li key={s.subscriber_id}>
-                  <button type="button" className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-muted"
+                  <button type="button" className="flex w-full items-center justify-between gap-2 rounded-xl px-3 py-2 text-left text-sm hover:bg-muted"
                           onClick={() => {
                             if (!s.olt_id) return toast.error("That customer is on mobile data, not on an OLT.");
                             setExpanded(s.olt_id);
@@ -269,7 +272,7 @@ export default function NetworkGraph() {
 
       {loading ? <Skeleton className="h-[70svh] rounded-2xl" /> : (
         <div ref={box}
-             className="relative -mx-4 h-[76svh] touch-none overflow-hidden select-none md:-mx-6"
+             className="relative -mx-4 h-[68svh] touch-none overflow-hidden select-none md:-mx-6 md:h-[76svh] lg:-mx-8"
              onPointerDown={(e) => { drag.current = { x: e.clientX, y: e.clientY, moved: false }; }}
              onPointerMove={(e) => {
                const d = drag.current;
@@ -326,7 +329,7 @@ export default function NetworkGraph() {
                 const health = e.olt?.health ?? byId.get(e.to)!.health;
                 const path = `M ${a.x} ${a.y} Q ${(a.x + b.x) / 2 * 0.92} ${(a.y + b.y) / 2 * 0.92} ${b.x} ${b.y}`;
                 return (
-                  <g key={e.id} className={cn("transition-opacity duration-300", (dim(e.from) || dim(e.to)) && "opacity-15")}>
+                  <g key={e.id} className={cn("transition-opacity duration-500 ease-out", (dim(e.from) || dim(e.to)) && "opacity-10")}>
                     {/* A steady translucent link; a light crosses it now and then, more often the busier it is. */}
                     <path d={path} fill="none" strokeLinecap="round" stroke={`url(#eg-${i})`}
                           className={health === "down" ? "opacity-25" : "opacity-40"}
@@ -347,13 +350,17 @@ export default function NetworkGraph() {
               {nodes.map((n) => (
                 <g key={n.id} data-node={n.id} transform={`translate(${n.x} ${n.y})`} tabIndex={0} role="button"
                    aria-label={`${n.label}, ${WORD[n.health]}`}
-                   className={cn("cursor-pointer outline-none transition-opacity duration-300", dim(n.id) && "opacity-20")}
+                   className={cn("cursor-pointer outline-none transition-opacity duration-500 ease-out", dim(n.id) && "opacity-15")}
                    onPointerEnter={() => setHover(n.id)} onPointerLeave={() => setHover(null)}
                    onFocus={() => setHover(n.id)} onBlur={() => setHover(null)}
                    onClick={(e) => openNode(n, e)}
                    onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && openNode(n, { currentTarget: e.currentTarget })}>
                   {n.kind === "core" && <circle r={70} fill="url(#core-glow)" className="animate-pulse" />}
-                  <circle r={n.r + 5} className={cn("fill-transparent transition-all", hover === n.id ? "stroke-primary" : "stroke-transparent")} strokeWidth={2} />
+                  {/* The ring of the node under the pointer or selected: it grows in, and stays while selected. */}
+                  <circle r={n.r + 6} strokeWidth={2 / Math.max(1, view.k)} style={{ transformBox: "fill-box", transformOrigin: "center" }}
+                          className={cn("fill-primary/10 stroke-primary transition-[transform,opacity] duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]",
+                            focus === n.id ? "scale-100 opacity-100" : "scale-50 opacity-0")} />
+                  {picked === n.id && <circle r={n.r + 6} className="animate-ping fill-none stroke-primary/60" strokeWidth={1} style={{ transformBox: "fill-box", transformOrigin: "center", animationDuration: "2.4s" }} />}
                   <circle r={n.r}
                           fill={`url(#sphere-${n.kind === "core" ? "core" : n.kind === "olt" || n.kind === "customer" ? n.health : "hub"})`}
                           className={cn(n.kind !== "core" && n.kind !== "olt" && STROKE[n.health], n.health === "down" && n.kind === "olt" && "animate-pulse")}
@@ -371,11 +378,11 @@ export default function NetworkGraph() {
             </g>
           </svg>
 
-          <div className="absolute bottom-3 left-3 flex flex-wrap gap-3 rounded-xl border bg-background/80 px-3 py-2 text-xs backdrop-blur">
+          <div className="absolute bottom-3 left-3 flex max-w-[calc(100%-5rem)] flex-wrap gap-x-3 gap-y-1 rounded-2xl border border-foreground/10 bg-background/70 px-3 py-2 text-xs backdrop-blur-xl">
             {(["healthy", "busy", "down"] as const).map((h) => <StatusDot key={h} tone={TONE[h]} label={WORD[h]} />)}
-            <span className="text-muted-foreground">Line thickness is uplink load</span>
+            <span className="text-muted-foreground max-sm:hidden">Line thickness is uplink load</span>
           </div>
-          <div className="absolute right-3 bottom-3 flex flex-col gap-1 rounded-xl border bg-background/80 p-1 backdrop-blur">
+          <div className="absolute right-3 bottom-3 flex flex-col gap-1 rounded-full border border-foreground/10 bg-background/70 p-1 backdrop-blur-xl">
             <Button size="icon-sm" variant="ghost" aria-label="Zoom in" onClick={() => zoom(1.25)}><PlusIcon /></Button>
             <Button size="icon-sm" variant="ghost" aria-label="Zoom out" onClick={() => zoom(0.8)}><MinusIcon /></Button>
             <Button size="icon-sm" variant="ghost" aria-label="Fit the network" onClick={fit}><LocateFixedIcon /></Button>

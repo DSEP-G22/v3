@@ -1,7 +1,8 @@
 "use client";
 
+import { animate, stagger } from "animejs";
 import { ShieldCheckIcon } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { FocusLayer, originOf, type Origin } from "@/components/fx/focus-layer";
@@ -84,6 +85,8 @@ const MODELS: Record<string, string[]> = {
   whisper: ["faster-whisper-small-int8"],
 };
 
+/** The details window's halo: the glow box's light, outside the window. */
+const GLOW = "shadow-[-18px_-10px_56px_-18px_color-mix(in_oklch,var(--primary)_65%,transparent),18px_14px_56px_-18px_color-mix(in_oklch,var(--gold)_40%,transparent)]";
 const TONE = { active: "bg-success", inactive: "bg-destructive", off: "bg-muted-foreground/40", unknown: "bg-warning" } as const;
 const WORD = { active: "Active", inactive: "Not answering", off: "Not running", unknown: "Not verified" } as const;
 
@@ -109,6 +112,21 @@ export default function Models() {
     ro.observe(el);
     return () => ro.disconnect();
   }, [loading]);
+
+  // Stages rise in, in pipeline order, the first time the map is drawn.
+  useEffect(() => {
+    if (loading || !frame.current || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    animate(frame.current.querySelectorAll("[data-stage]"), { opacity: [0, 1], y: [14, 0], scale: [0.96, 1], duration: 800, delay: stagger(55), ease: "outExpo" });
+    animate(frame.current.querySelectorAll("[data-link]"), { opacity: [0, 1], duration: 1200, delay: stagger(40, { start: 250 }), ease: "outQuad" });
+  }, [loading]);
+
+  // The selected stage stays lit with its neighbours; everything else steps back.
+  const near = useMemo(() => {
+    if (!sel) return null;
+    const set = new Set([sel.id]);
+    LINKS.forEach(([a, b]) => { if (a === sel.id) set.add(b); if (b === sel.id) set.add(a); });
+    return set;
+  }, [sel]);
 
   const role = (id?: string) => data?.roles.find((r) => r.role === id);
   const state = (id: string): keyof typeof WORD => {
@@ -155,32 +173,37 @@ export default function Models() {
   const bound = role(stage?.role);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">Models</h1>
-          <p className="text-sm text-muted-foreground">Every stage, the service it runs on and the model inside it. Click one to verify or rebind it.</p>
+          <p className="pixel-label text-[15px] text-primary">Pipeline</p>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight">Models</h1>
+          <p className="mt-1 max-w-xl text-sm text-muted-foreground">Every stage, the service it runs on and the model inside it. Click one to verify or rebind it.</p>
         </div>
-        <Button onClick={verifyAll} disabled={checking.size > 0}><ShieldCheckIcon /> {checking.size ? "Verifying" : "Verify every model"}</Button>
+        <Button onClick={verifyAll} disabled={checking.size > 0} className="glow-box relative h-10 rounded-full px-5" data-glow={checking.size ? "on" : undefined}>
+          <ShieldCheckIcon /> {checking.size ? "Verifying" : "Verify every model"}
+        </Button>
       </div>
 
       {/* A phone gets the stages as a list, in pipeline order; the map needs a wider screen. */}
       {!loading && (
-        <ol className="space-y-2 md:hidden">
+        <ol className="space-y-2.5 md:hidden">
           {STAGES.map((s) => {
             const st = state(s.id);
             const r = role(s.role);
             return (
               <li key={s.id}>
                 <button type="button" onClick={(e) => { setEdit(null); setSel({ id: s.id, origin: originOf(e) }); }}
-                        className={cn("flex w-full items-center gap-3 rounded-xl border bg-card p-3 text-left transition-colors active:bg-muted",
-                          checking.has(s.id) && "animate-pulse ring-4 ring-primary/20")}>
-                  <span className={cn("size-2.5 shrink-0 rounded-full", TONE[st])} title={WORD[st]} />
+                        data-glow={sel?.id === s.id || checking.has(s.id) ? "on" : undefined}
+                        className="glow-box relative flex w-full items-center gap-3 rounded-2xl border border-foreground/10 bg-card/80 p-3.5 text-left transition-colors active:bg-muted">
+                  <span className="w-6 shrink-0 font-pixel text-lg leading-none text-muted-foreground">{String(STAGES.indexOf(s) + 1).padStart(2, "0")}</span>
                   <span className="min-w-0 flex-1">
                     <span className="block font-medium">{s.label}</span>
                     <span className="block truncate font-mono text-[11px] text-muted-foreground">{r ? `${r.impl}:${r.model_version}` : s.model}</span>
                   </span>
-                  <span className="shrink-0 text-[11px] text-muted-foreground">{WORD[st]}</span>
+                  <span className="flex shrink-0 items-center gap-1.5 text-[11px] text-muted-foreground">
+                    <span className={cn("size-2 rounded-full", TONE[st])} />{WORD[st]}
+                  </span>
                 </button>
               </li>
             );
@@ -188,16 +211,17 @@ export default function Models() {
         </ol>
       )}
       {loading ? <Skeleton className="h-96 rounded-2xl" /> : (
-        <div ref={frame} className="relative -mx-4 hidden overflow-hidden md:-mx-6 md:block"
-             style={{ height: CONTENT_H * fit.scale, background: "radial-gradient(ellipse 62% 48% at 50% 45%, color-mix(in oklch, var(--primary) 14%, transparent), transparent 100%)" }}>
+        <div ref={frame} className="relative -mx-4 hidden overflow-hidden md:-mx-6 md:block lg:-mx-8"
+             style={{ height: CONTENT_H * fit.scale, background: "radial-gradient(ellipse 62% 48% at 50% 45%, color-mix(in oklch, var(--primary) 12%, transparent), transparent 100%), radial-gradient(color-mix(in oklch, var(--foreground) 9%, transparent) 1px, transparent 1px) 0 0 / 22px 22px" }}>
           <div className="relative origin-top-left" style={{ width: CONTENT_W, height: CONTENT_H, transform: `translateX(${fit.offset}px) scale(${fit.scale})` }}>
             <svg className="absolute inset-0 size-full" aria-hidden>
               {LINKS.map(([a, b], i) => {
                 const d = curve(box(a), box(b));
                 const live = a !== "in" && b !== "out" ? state(a) === "active" && state(b) === "active" : false;
+                const on = a === sel?.id || b === sel?.id;
                 return (
-                  <g key={`${a}-${b}`}>
-                    <path d={d} fill="none" strokeWidth={1.5} className={live ? "stroke-success/50" : "stroke-primary/30"} />
+                  <g key={`${a}-${b}`} data-link className={cn("transition-opacity duration-500 ease-out", near && !on && "opacity-20")}>
+                    <path d={d} fill="none" strokeWidth={on ? 2.5 : 1.5} className={cn("transition-[stroke-width] duration-500", on ? "stroke-primary" : live ? "stroke-success/50" : "stroke-primary/30")} />
                     <path d={d} fill="none" strokeWidth={2.5} pathLength={100} className="link-pulse"
                           stroke={live ? "color-mix(in oklch, var(--success) 40%, white)" : "color-mix(in oklch, var(--primary) 45%, white)"}
                           style={{ "--pulse-dur": "6s", "--pulse-delay": `${i * 0.35}s` } as React.CSSProperties} />
@@ -206,7 +230,7 @@ export default function Models() {
               })}
             </svg>
             {(["in", "out"] as const).map((k) => (
-              <div key={k} className="absolute grid size-6 place-items-center rounded-full bg-primary text-[9px] font-semibold text-primary-foreground"
+              <div key={k} className="pixel-label absolute grid size-6 place-items-center rounded-full bg-primary text-[11px] text-primary-foreground shadow-[0_0_16px_var(--primary)]"
                    style={{ left: ENDS[k].x, top: ENDS[k].y + H / 2 - 12 }} title={k === "in" ? "Customer message" : "Reply to customer"}>
                 {k === "in" ? "IN" : "OUT"}
               </div>
@@ -216,12 +240,17 @@ export default function Models() {
               const st = state(s.id);
               const r = role(s.role);
               return (
-                <button key={s.id} type="button" onClick={(e) => { setEdit(null); setSel({ id: s.id, origin: originOf(e) }); }}
-                        className={cn("group absolute flex flex-col justify-between rounded-2xl border bg-card/90 p-3 text-left shadow-sm backdrop-blur transition-all duration-300 hover:-translate-y-1 hover:border-primary/60 hover:shadow-lg hover:shadow-primary/15",
-                          checking.has(s.id) && "animate-pulse ring-4 ring-primary/20")}
-                        style={{ left: p.x, top: p.y, width: W, height: H }}>
+                <div key={s.id} data-stage className="absolute" style={{ left: p.x, top: p.y, width: W, height: H }}>
+                <button type="button" onClick={(e) => { setEdit(null); setSel({ id: s.id, origin: originOf(e) }); }}
+                        data-glow={sel?.id === s.id || checking.has(s.id) ? "on" : undefined}
+                        className={cn("glow-box group relative flex size-full flex-col justify-between rounded-2xl border border-foreground/10 bg-card/85 p-3 text-left backdrop-blur transition-[opacity,transform,border-color,filter] duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] hover:-translate-y-0.5",
+                          near && !near.has(s.id) && "opacity-40 saturate-50",
+                          sel?.id === s.id && "-translate-y-0.5 border-transparent")}>
                   <span className="flex items-center justify-between gap-2">
-                    <span className="text-sm font-semibold">{s.label}</span>
+                    <span className="flex items-baseline gap-2">
+                      <span className="font-pixel text-base leading-none text-muted-foreground">{String(STAGES.indexOf(s) + 1).padStart(2, "0")}</span>
+                      <span className="text-sm font-semibold">{s.label}</span>
+                    </span>
                     <span className="relative flex size-2.5" title={WORD[st]}>
                       {st === "active" && <span className="absolute inline-flex size-full animate-ping rounded-full bg-success/60" />}
                       <span className={cn("relative inline-flex size-2.5 rounded-full", TONE[st])} />
@@ -230,6 +259,7 @@ export default function Models() {
                   <span className="truncate font-mono text-[11px] text-muted-foreground">{r ? `${r.impl}:${r.model_version}` : s.model}</span>
                   <span className="text-[11px] text-muted-foreground">{s.service} · {WORD[st]}</span>
                 </button>
+                </div>
               );
             })}
           </div>
@@ -237,25 +267,28 @@ export default function Models() {
       )}
 
       <section>
-        <h2 className="mb-2 font-medium">History</h2>
-        <ul className="space-y-1 text-sm">
+        <h2 className="pixel-label mb-3 text-[15px] text-muted-foreground">History</h2>
+        <ol className="space-y-3 border-l border-foreground/10 pl-5 text-sm">
           {history.data?.events.slice(0, 10).map((e) => (
-            <li key={e.id} className="text-muted-foreground">
-              <span className="text-foreground">{e.role.replace(/_/g, " ")}</span> {e.from_binding} to {e.to_binding}, by {e.actor}
-              {e.reason && `: ${e.reason}`} ({new Date(e.at).toLocaleString()})
+            <li key={e.id} className="relative text-muted-foreground">
+              <span aria-hidden className="absolute top-1.5 -left-[24.5px] size-2 rounded-full bg-primary ring-4 ring-background" />
+              <span className="font-medium text-foreground capitalize">{e.role.replace(/_/g, " ")}</span>{" "}
+              <span className="font-mono text-xs">{e.from_binding}</span> to <span className="font-mono text-xs text-foreground">{e.to_binding}</span>, by {e.actor}
+              {e.reason && `: ${e.reason}`}
+              <span className="block text-xs text-muted-foreground/70">{new Date(e.at).toLocaleString()}</span>
             </li>
           ))}
           {!history.data?.events.length && <li className="text-muted-foreground">No changes yet.</li>}
-        </ul>
+        </ol>
       </section>
 
-      <FocusLayer open={!!stage} origin={sel?.origin ?? null} onClose={() => setSel(null)} width={400}
+      <FocusLayer open={!!stage} origin={sel?.origin ?? null} onClose={() => setSel(null)} width={400} className={GLOW}
                   title={stage?.label ?? ""} subtitle={stage ? `${stage.service} service` : undefined}>
         {stage && (
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">{stage.does}</p>
-            <div className="rounded-xl border p-3 text-sm">
-              <p className="text-xs text-muted-foreground">Model</p>
+            <div className="rounded-xl border border-foreground/10 bg-muted/40 p-3 text-sm">
+              <p className="pixel-label text-[14px] text-muted-foreground">Model</p>
               <p className="font-mono text-xs">{bound ? `${bound.impl}:${bound.model_version}` : stage.model}</p>
               {bound && <p className="mt-1 text-xs text-muted-foreground">{bound.summary} Generation {bound.generation}.</p>}
             </div>

@@ -68,15 +68,16 @@ export default function Overview() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold tracking-tight">Overview</h1>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div>
+        <p className="pixel-label text-[15px] text-primary">Admin</p>
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight">Overview</h1>
+      </div>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {kpis.map((k) => (
-          <Card key={k.label} size="sm">
-            <CardHeader>
-              <CardDescription>{k.label}</CardDescription>
-              <CardTitle className="text-2xl tabular-nums">{k.value}</CardTitle>
-            </CardHeader>
-          </Card>
+          <div key={k.label} className="rounded-2xl border border-foreground/10 bg-card/60 p-4 backdrop-blur">
+            <p className="text-xs text-muted-foreground">{k.label}</p>
+            <p className="mt-3 font-pixel text-3xl leading-none sm:text-4xl">{k.value}</p>
+          </div>
         ))}
       </div>
       <Card>

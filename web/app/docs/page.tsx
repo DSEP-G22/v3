@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { DocsNav } from "@/components/docs-nav";
 import { FluidGradient } from "@/components/fx/fluid-gradient";
 import { SiteHeader } from "@/components/site-header";
 
@@ -19,17 +20,35 @@ const SECTIONS = [
   { id: "running", title: "Running it" },
 ];
 
+const SURFACES = [
+  { path: "/app", who: "Customers", what: "Tickets, billing, usage and plan." },
+  { path: "/console", who: "Agents", what: "The queue, the draft, approve or send back." },
+  { path: "/admin", who: "Admins", what: "Auto reply, models, grounding and traces." },
+  { path: "/sim", who: "Operators", what: "The simulated network and a test lab." },
+];
+
 function Section({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {
+  const n = SECTIONS.findIndex((s) => s.id === id) + 1;
   return (
-    <section id={id} className="scroll-mt-24 space-y-3 border-b pb-10 last:border-0">
-      <h2 className="text-xl font-semibold tracking-tight">{title}</h2>
-      <div className="space-y-3 text-[15px] leading-relaxed text-muted-foreground [&_strong]:text-foreground">{children}</div>
+    <section id={id} className="scroll-mt-32 border-b border-foreground/10 pb-12 last:border-0 lg:scroll-mt-24">
+      <p className="font-pixel text-lg leading-none text-primary">{String(n).padStart(2, "0")}</p>
+      <h2 className="mt-2 text-2xl font-semibold tracking-tight">{title}</h2>
+      <div className="mt-4 space-y-4 text-[15px] leading-relaxed text-muted-foreground [&_li::marker]:text-primary/60 [&_strong]:font-medium [&_strong]:text-foreground">{children}</div>
     </section>
   );
 }
 
+/** A command block, framed like a terminal window. */
 function Code({ children }: { children: string }) {
-  return <pre className="overflow-x-auto rounded-xl border bg-secondary/60 p-4 font-mono text-xs text-foreground">{children}</pre>;
+  return (
+    <div className="overflow-hidden rounded-2xl border border-foreground/10 bg-[oklch(0.16_0.03_295)] text-[oklch(0.92_0.02_300)] shadow-lg shadow-primary/5">
+      <div className="flex items-center gap-1.5 border-b border-white/10 px-4 py-2.5">
+        {["bg-destructive/70", "bg-warning/70", "bg-success/70"].map((c) => <span key={c} aria-hidden className={`size-2.5 rounded-full ${c}`} />)}
+        <span className="pixel-label ml-2 text-[14px] text-white/40">Terminal</span>
+      </div>
+      <pre className="overflow-x-auto p-4 font-mono text-xs leading-relaxed">{children}</pre>
+    </div>
+  );
 }
 
 export default function Docs() {
@@ -37,31 +56,39 @@ export default function Docs() {
     <>
       <SiteHeader />
       <div className="relative isolate">
-        <FluidGradient className="h-[32rem]" />
-        <header className="mx-auto w-full max-w-6xl px-4 pt-16 pb-10">
-          <p className="text-sm font-medium text-primary">Documentation</p>
-          <h1 className="mt-2 text-4xl font-semibold tracking-tight">How Lanka Link works</h1>
-          <p className="mt-3 max-w-2xl text-muted-foreground">
+        <FluidGradient className="h-[34rem] opacity-80" />
+        <header className="mx-auto w-full max-w-6xl px-4 pt-14 pb-10 sm:pt-20">
+          <p className="pixel-label text-[17px] text-primary">Documentation</p>
+          <h1 className="mt-3 max-w-3xl text-4xl leading-[1.05] font-semibold tracking-tight text-balance sm:text-5xl">
+            How Lanka Link <span className="text-shine font-pixel font-normal">works</span>
+          </h1>
+          <p className="mt-4 max-w-2xl text-base text-muted-foreground sm:text-lg">
             The customer app, the agent console, the admin area and the simulation, and what happens between a
             customer opening a ticket and reading the reply.
           </p>
-        </header>
-      </div>
-
-      <div className="mx-auto grid w-full max-w-6xl gap-10 px-4 pb-24 lg:grid-cols-[14rem_1fr]">
-        <nav aria-label="On this page" className="hidden lg:block">
-          <ul className="sticky top-24 space-y-1 border-l text-sm">
-            {SECTIONS.map((s) => (
-              <li key={s.id}>
-                <a href={`#${s.id}`} className="-ml-px block border-l border-transparent py-1 pl-4 text-muted-foreground hover:border-primary hover:text-foreground">
-                  {s.title}
-                </a>
+          <ul className="mt-10 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {SURFACES.map((s) => (
+              <li key={s.path} className="rounded-2xl border border-foreground/10 bg-background/60 p-4 backdrop-blur">
+                <p className="font-pixel text-xl leading-none text-primary">{s.path}</p>
+                <p className="mt-3 font-medium">{s.who}</p>
+                <p className="mt-0.5 text-sm text-muted-foreground">{s.what}</p>
               </li>
             ))}
           </ul>
-        </nav>
+        </header>
+      </div>
 
-        <article className="min-w-0 max-w-3xl space-y-10 [overflow-wrap:anywhere]">
+      {/* A phone reads with the contents as a sticky row of chips under the header. */}
+      <div className="sticky top-16 z-20 border-y border-foreground/5 bg-background/80 px-4 backdrop-blur-xl lg:hidden">
+        <DocsNav sections={SECTIONS} variant="chips" />
+      </div>
+
+      <div className="mx-auto grid w-full max-w-6xl gap-12 px-4 pt-10 pb-24 lg:grid-cols-[15rem_1fr]">
+        <aside className="hidden lg:block">
+          <div className="sticky top-24"><DocsNav sections={SECTIONS} variant="rail" /></div>
+        </aside>
+
+        <article className="min-w-0 max-w-3xl space-y-12 [overflow-wrap:anywhere]">
           <Section id="overview" title="Overview">
             <p>
               Lanka Link is a telecom operator with a support system that reads every request against the customer&apos;s

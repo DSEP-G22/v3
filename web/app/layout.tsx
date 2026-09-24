@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono, Instrument_Serif, Noto_Sans_Sinhala, Noto_Sans_Tamil } from "next/font/google";
+import { Geist_Mono, Noto_Sans_Sinhala, Noto_Sans_Tamil, Space_Grotesk, VT323 } from "next/font/google";
 
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
@@ -7,10 +7,11 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 
 import "./globals.css";
 
-const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
+// Space Grotesk carries the words; VT323, a terminal face, carries labels, numbers and one accent per headline.
+const grotesk = Space_Grotesk({ variable: "--font-grotesk", subsets: ["latin"] });
+const pixel = VT323({ variable: "--font-vt323", subsets: ["latin"], weight: "400" });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
-const serif = Instrument_Serif({ variable: "--font-instrument-serif", subsets: ["latin"], weight: "400", style: ["normal", "italic"] });
-const notoSinhala =Noto_Sans_Sinhala({ variable: "--font-noto-sinhala", subsets: ["sinhala"] });
+const notoSinhala = Noto_Sans_Sinhala({ variable: "--font-noto-sinhala", subsets: ["sinhala"] });
 const notoTamil = Noto_Sans_Tamil({ variable: "--font-noto-tamil", subsets: ["tamil"] });
 
 export const metadata: Metadata = {
@@ -26,7 +27,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${geistSans.variable} ${geistMono.variable} ${serif.variable} ${notoSinhala.variable} ${notoTamil.variable} h-full antialiased`}
+      className={`${grotesk.variable} ${pixel.variable} ${geistMono.variable} ${notoSinhala.variable} ${notoTamil.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
