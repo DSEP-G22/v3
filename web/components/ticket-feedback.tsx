@@ -42,7 +42,7 @@ export function TicketFeedback({ ticketId, rating, comment, onSaved }: {
   }
 
   return (
-    <section aria-labelledby="fb" className="rounded-2xl border bg-linear-to-br from-primary/5 via-card to-gold/10 p-5">
+    <section aria-labelledby="fb" className="rounded-2xl border bg-linear-to-br from-primary/5 via-card to-highlight/10 p-5">
       <h2 id="fb" className="font-semibold">{saved ? "Your rating" : "How did we do?"}</h2>
       <div className="mt-3 flex gap-2" role="radiogroup" aria-label="Rating">
         {FACES.map(({ value: v, icon: Icon, label }) => (

@@ -86,7 +86,7 @@ const MODELS: Record<string, string[]> = {
 };
 
 /** The details window's halo: the glow box's light, outside the window. */
-const GLOW = "shadow-[-18px_-10px_56px_-18px_color-mix(in_oklch,var(--primary)_65%,transparent),18px_14px_56px_-18px_color-mix(in_oklch,var(--gold)_40%,transparent)]";
+const GLOW = "shadow-[-18px_-10px_56px_-18px_color-mix(in_oklch,var(--primary)_65%,transparent),18px_14px_56px_-18px_color-mix(in_oklch,var(--lilac)_40%,transparent)]";
 const TONE = { active: "bg-success", inactive: "bg-destructive", off: "bg-muted-foreground/40", unknown: "bg-warning" } as const;
 const WORD = { active: "Active", inactive: "Not answering", off: "Not running", unknown: "Not verified" } as const;
 
@@ -176,7 +176,7 @@ export default function Models() {
     <div className="space-y-8">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="pixel-label text-[15px] text-primary">Pipeline</p>
+          <p className="text-[11px] font-medium tracking-wider uppercase text-primary">Pipeline</p>
           <h1 className="mt-1 text-2xl font-semibold tracking-tight">Models</h1>
           <p className="mt-1 max-w-xl text-sm text-muted-foreground">Every stage, the service it runs on and the model inside it. Click one to verify or rebind it.</p>
         </div>
@@ -196,7 +196,7 @@ export default function Models() {
                 <button type="button" onClick={(e) => { setEdit(null); setSel({ id: s.id, origin: originOf(e) }); }}
                         data-glow={sel?.id === s.id || checking.has(s.id) ? "on" : undefined}
                         className="glow-box relative flex w-full items-center gap-3 rounded-2xl border border-foreground/10 bg-card/80 p-3.5 text-left transition-colors active:bg-muted">
-                  <span className="w-6 shrink-0 font-pixel text-lg leading-none text-muted-foreground">{String(STAGES.indexOf(s) + 1).padStart(2, "0")}</span>
+                  <span className="w-6 shrink-0 text-xs font-medium tabular-nums leading-none text-muted-foreground">{String(STAGES.indexOf(s) + 1).padStart(2, "0")}</span>
                   <span className="min-w-0 flex-1">
                     <span className="block font-medium">{s.label}</span>
                     <span className="block truncate font-mono text-[11px] text-muted-foreground">{r ? `${r.impl}:${r.model_version}` : s.model}</span>
@@ -212,7 +212,7 @@ export default function Models() {
       )}
       {loading ? <Skeleton className="h-96 rounded-2xl" /> : (
         <div ref={frame} className="relative -mx-4 hidden overflow-hidden md:-mx-6 md:block lg:-mx-8"
-             style={{ height: CONTENT_H * fit.scale, background: "radial-gradient(ellipse 62% 48% at 50% 45%, color-mix(in oklch, var(--primary) 12%, transparent), transparent 100%), radial-gradient(color-mix(in oklch, var(--foreground) 9%, transparent) 1px, transparent 1px) 0 0 / 22px 22px" }}>
+             style={{ height: CONTENT_H * fit.scale, background: "radial-gradient(color-mix(in oklch, var(--foreground) 9%, transparent) 1px, transparent 1px) 0 0 / 22px 22px" }}>
           <div className="relative origin-top-left" style={{ width: CONTENT_W, height: CONTENT_H, transform: `translateX(${fit.offset}px) scale(${fit.scale})` }}>
             <svg className="absolute inset-0 size-full" aria-hidden>
               {LINKS.map(([a, b], i) => {
@@ -230,7 +230,7 @@ export default function Models() {
               })}
             </svg>
             {(["in", "out"] as const).map((k) => (
-              <div key={k} className="pixel-label absolute grid size-6 place-items-center rounded-full bg-primary text-[11px] text-primary-foreground shadow-[0_0_16px_var(--primary)]"
+              <div key={k} className="absolute grid size-6 place-items-center rounded-full bg-primary text-[9px] font-semibold text-primary-foreground shadow-[0_0_16px_var(--primary)]"
                    style={{ left: ENDS[k].x, top: ENDS[k].y + H / 2 - 12 }} title={k === "in" ? "Customer message" : "Reply to customer"}>
                 {k === "in" ? "IN" : "OUT"}
               </div>
@@ -248,7 +248,7 @@ export default function Models() {
                           sel?.id === s.id && "-translate-y-0.5 border-transparent")}>
                   <span className="flex items-center justify-between gap-2">
                     <span className="flex items-baseline gap-2">
-                      <span className="font-pixel text-base leading-none text-muted-foreground">{String(STAGES.indexOf(s) + 1).padStart(2, "0")}</span>
+                      <span className="text-xs font-medium tabular-nums leading-none text-muted-foreground">{String(STAGES.indexOf(s) + 1).padStart(2, "0")}</span>
                       <span className="text-sm font-semibold">{s.label}</span>
                     </span>
                     <span className="relative flex size-2.5" title={WORD[st]}>
@@ -267,7 +267,7 @@ export default function Models() {
       )}
 
       <section>
-        <h2 className="pixel-label mb-3 text-[15px] text-muted-foreground">History</h2>
+        <h2 className="mb-3 text-[11px] font-medium tracking-wider text-muted-foreground uppercase">History</h2>
         <ol className="space-y-3 border-l border-foreground/10 pl-5 text-sm">
           {history.data?.events.slice(0, 10).map((e) => (
             <li key={e.id} className="relative text-muted-foreground">
@@ -288,7 +288,7 @@ export default function Models() {
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">{stage.does}</p>
             <div className="rounded-xl border border-foreground/10 bg-muted/40 p-3 text-sm">
-              <p className="pixel-label text-[14px] text-muted-foreground">Model</p>
+              <p className="text-[11px] font-medium tracking-wider uppercase text-muted-foreground">Model</p>
               <p className="font-mono text-xs">{bound ? `${bound.impl}:${bound.model_version}` : stage.model}</p>
               {bound && <p className="mt-1 text-xs text-muted-foreground">{bound.summary} Generation {bound.generation}.</p>}
             </div>

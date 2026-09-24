@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 
 /**
- * A soft violet to gold trail that follows the pointer. Decorative only: off for touch,
+ * A soft violet to lilac trail that follows the pointer. Decorative only: off for touch,
  * off under reduced motion, paused while the tab is hidden, never intercepts a click.
  */
 export function FluidCursor() {
@@ -32,7 +32,7 @@ export function FluidCursor() {
     const pts = Array.from({ length: N }, () => ({ x: w / 2, y: h / 2 }));
     const mouse = { x: w / 2, y: h / 2, seen: false, still: 0 };
     const violet = [139, 92, 246];
-    const gold = [234, 196, 98];
+    const lilac = [214, 196, 250];
 
     const move = (e: PointerEvent) => {
       mouse.x = e.clientX;
@@ -61,7 +61,7 @@ export function FluidCursor() {
       pts.forEach((p, i) => {
         const t = 1 - i / N;
         const r = 34 * t + 6;
-        const c = violet.map((v, k) => Math.round(v + (gold[k] - v) * (i / N)));
+        const c = violet.map((v, k) => Math.round(v + (lilac[k] - v) * (i / N)));
         const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r);
         g.addColorStop(0, `rgba(${c.join(",")},${0.22 * t * fade})`);
         g.addColorStop(1, `rgba(${c.join(",")},0)`);

@@ -42,8 +42,8 @@
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
   /* Gold highlight: badges, the brand mark and one call to action per screen. */
-  --color-gold: var(--gold);
-  --color-gold-foreground: var(--gold-foreground);
+  --color-highlight: var(--highlight);
+  --color-highlight-foreground: var(--highlight-foreground);
   --color-lilac: var(--lilac);
   /* Muted status colors: dots and small badges only, always paired with a word. */
   --color-success: var(--success);
@@ -61,7 +61,7 @@
   --animate-shine: shine 6s linear infinite;
 }
 
-/* Violet primary, lilac surfaces, a light gold accent. */
+/* Violet primary, lilac surfaces, a pale lilac highlight. */
 :root {
   --font-app: var(--font-grotesk), var(--font-noto-sinhala), var(--font-noto-tamil),
     ui-sans-serif, system-ui, sans-serif;
@@ -79,8 +79,8 @@
   --muted-foreground: oklch(0.52 0.04 295);
   --accent: oklch(0.95 0.03 300);
   --accent-foreground: oklch(0.32 0.1 298);
-  --gold: oklch(0.84 0.12 85);
-  --gold-foreground: oklch(0.3 0.06 70);
+  --highlight: oklch(0.82 0.09 305);
+  --highlight-foreground: oklch(0.28 0.1 298);
   --lilac: oklch(0.9 0.06 305);
   --destructive: oklch(0.577 0.245 27.325);
   --success: oklch(0.6 0.11 155);
@@ -90,7 +90,7 @@
   --input: oklch(0.91 0.02 300);
   --ring: oklch(0.5 0.2 298);
   --chart-1: oklch(0.5 0.2 298);
-  --chart-2: oklch(0.78 0.13 85);
+  --chart-2: oklch(0.78 0.1 305);
   --chart-3: oklch(0.68 0.13 305);
   --chart-4: oklch(0.6 0.1 265);
   --chart-5: oklch(0.86 0.06 305);
@@ -120,8 +120,8 @@
   --muted-foreground: oklch(0.74 0.04 300);
   --accent: oklch(0.3 0.06 298);
   --accent-foreground: oklch(0.97 0.01 300);
-  --gold: oklch(0.85 0.12 85);
-  --gold-foreground: oklch(0.25 0.05 70);
+  --highlight: oklch(0.82 0.09 305);
+  --highlight-foreground: oklch(0.2 0.06 298);
   --lilac: oklch(0.42 0.1 300);
   --destructive: oklch(0.704 0.191 22.216);
   --success: oklch(0.72 0.12 155);
@@ -131,7 +131,7 @@
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.72 0.16 300);
   --chart-1: oklch(0.72 0.16 300);
-  --chart-2: oklch(0.85 0.12 85);
+  --chart-2: oklch(0.82 0.09 305);
   --chart-3: oklch(0.6 0.13 305);
   --chart-4: oklch(0.7 0.1 265);
   --chart-5: oklch(0.45 0.08 300);
@@ -155,15 +155,13 @@
   html {
     @apply font-sans;
   }
+  /* The staff areas: Geist, formal and plain. Portaled windows inherit it from the body. */
+  body:has([data-slot="sidebar-wrapper"]) {
+    --font-app: var(--font-geist-sans), var(--font-noto-sinhala), var(--font-noto-tamil), ui-sans-serif, system-ui, sans-serif;
+    font-family: var(--font-app);
+  }
 }
 
-/* Page ground: a violet glow from the top, fading to black, under a fine dither. */
-.dark body {
-  background:
-    radial-gradient(1100px 620px at 12% -12%, color-mix(in oklch, var(--primary) 20%, transparent), transparent 62%),
-    radial-gradient(900px 520px at 100% -6%, color-mix(in oklch, var(--gold) 9%, transparent), transparent 58%),
-    linear-gradient(to bottom, var(--background) 0%, oklch(0.12 0.02 295) 45%, #000 100%);
-}
 body::before {
   content: "";
   position: fixed;
@@ -241,7 +239,7 @@ body::before {
 
 /* Gold to violet text, for one headline word at a time. */
 .text-shine {
-  background: linear-gradient(90deg, var(--primary), var(--gold), var(--primary));
+  background: linear-gradient(90deg, var(--primary), var(--lilac), var(--primary));
   background-size: 200% auto;
   -webkit-background-clip: text;
   background-clip: text;
@@ -270,7 +268,7 @@ body::before {
 }
 @layer components {
 .glow-box {
-  --glow: conic-gradient(from var(--glow-angle), var(--primary), var(--lilac), var(--gold), var(--primary) 55%, var(--chart-4), var(--primary));
+  --glow: conic-gradient(from var(--glow-angle), var(--primary), var(--lilac), var(--primary) 55%, var(--chart-4), var(--primary));
   transition: box-shadow 0.6s cubic-bezier(0.32, 0.72, 0, 1);
 }
 .glow-box::before {
@@ -297,7 +295,7 @@ body::before {
 .glow-box[data-glow="on"] {
   box-shadow:
     -14px -6px 36px -14px color-mix(in oklch, var(--primary) 70%, transparent),
-    14px 8px 40px -14px color-mix(in oklch, var(--gold) 45%, transparent);
+    14px 8px 40px -14px color-mix(in oklch, var(--lilac) 45%, transparent);
 }
 }
 @media (prefers-reduced-motion: reduce) {

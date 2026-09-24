@@ -170,7 +170,7 @@ function Payments() {
                   <div>
                     <dt className="text-xs text-muted-foreground">Date</dt>
                     <dd className="mt-1 flex items-center gap-1.5 text-sm">
-                      <ClockIcon className="size-3.5 text-gold" /> {oldest ? `Due ${oldest.due_display}` : "Nothing due"}
+                      <ClockIcon className="size-3.5 text-highlight" /> {oldest ? `Due ${oldest.due_display}` : "Nothing due"}
                     </dd>
                   </div>
                 </dl>
@@ -203,7 +203,7 @@ function Payments() {
                   {bars.map((b) => (
                     <span key={b.invoice_no} title={`${b.issued_display}: ${b.total_display}`}
                           className={cn("flex-1 rounded-t-sm transition-all hover:opacity-80",
-                            OPEN.has(b.status) ? "bg-linear-to-t from-destructive/60 to-destructive" : "bg-linear-to-t from-primary/50 to-gold")}
+                            OPEN.has(b.status) ? "bg-linear-to-t from-destructive/60 to-destructive" : "bg-linear-to-t from-primary/50 to-highlight")}
                           style={{ height: `${Math.max(6, ((b.total ?? 0) / max) * 100)}%` }} />
                   ))}
                 </div>

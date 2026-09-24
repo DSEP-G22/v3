@@ -121,7 +121,7 @@ export default function TicketPage() {
         <ArrowLeftIcon className="size-4" /> Support
       </Link>
 
-      <header className="space-y-4 rounded-2xl border bg-linear-to-br from-primary/10 via-card to-gold/10 p-5">
+      <header className="space-y-4 rounded-2xl border bg-linear-to-br from-primary/10 via-card to-highlight/10 p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <h1 className="text-xl font-semibold tracking-tight">{t.subject}</h1>

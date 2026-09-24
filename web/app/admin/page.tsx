@@ -36,7 +36,7 @@ function FeedbackCard() {
           <ul className="divide-y text-sm">
             {data.recent.map((r) => (
               <li key={r.id} className="flex gap-3 py-2">
-                <span className="w-16 shrink-0 text-gold" aria-label={`${r.rating} of 5`}>{"★".repeat(r.rating)}<span className="text-muted">{"★".repeat(5 - r.rating)}</span></span>
+                <span className="w-16 shrink-0 text-highlight" aria-label={`${r.rating} of 5`}>{"★".repeat(r.rating)}<span className="text-muted">{"★".repeat(5 - r.rating)}</span></span>
                 <span className="min-w-0">
                   <span className="block truncate font-medium">{r.subject}</span>
                   {r.feedback && <span className="text-muted-foreground">{r.feedback}</span>}
@@ -69,14 +69,14 @@ export default function Overview() {
   return (
     <div className="space-y-6">
       <div>
-        <p className="pixel-label text-[15px] text-primary">Admin</p>
+        <p className="text-[11px] font-medium tracking-wider uppercase text-primary">Admin</p>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight">Overview</h1>
       </div>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {kpis.map((k) => (
           <div key={k.label} className="rounded-2xl border border-foreground/10 bg-card/60 p-4 backdrop-blur">
             <p className="text-xs text-muted-foreground">{k.label}</p>
-            <p className="mt-3 font-pixel text-3xl leading-none sm:text-4xl">{k.value}</p>
+            <p className="mt-3 text-2xl font-semibold tabular-nums leading-none">{k.value}</p>
           </div>
         ))}
       </div>

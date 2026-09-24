@@ -106,7 +106,7 @@ function Stat({ label, value, icon: Icon, tone }: { label: string; value: number
   return (
     <div className="rounded-2xl border border-foreground/10 bg-card/60 p-4 backdrop-blur">
       <p className="flex items-center gap-2 text-xs text-muted-foreground"><Icon className={cn("size-3.5", tone)} />{label}</p>
-      <p className="mt-3 font-pixel text-4xl leading-none"><Count value={value} /></p>
+      <p className="mt-3 text-2xl font-semibold tabular-nums leading-none"><Count value={value} /></p>
     </div>
   );
 }
@@ -227,7 +227,7 @@ export default function NetworkGraph() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="pixel-label text-[15px] text-primary">Simulation</p>
+          <p className="text-[11px] font-medium tracking-wider uppercase text-primary">Simulation</p>
           <h1 className="mt-1 text-2xl font-semibold tracking-tight">Network</h1>
           <p className="mt-1 text-sm text-muted-foreground">Drag to move, scroll to zoom, hover to trace a path, click any node or link to act on it.</p>
         </div>
@@ -366,7 +366,7 @@ export default function NetworkGraph() {
                           className={cn(n.kind !== "core" && n.kind !== "olt" && STROKE[n.health], n.health === "down" && n.kind === "olt" && "animate-pulse")}
                           strokeWidth={n.kind === "olt" || n.kind === "core" ? 0 : 1.5}
                           style={{ filter: "drop-shadow(0 6px 10px rgba(0,0,0,0.55))" }} />
-                  {n.kind === "core" && <circle r={8} className="fill-gold" />}
+                  {n.kind === "core" && <circle r={8} className="fill-highlight" />}
                   {((n.kind !== "olt" && n.kind !== "customer") || view.k > (n.kind === "customer" ? 1.8 : 1.25) || hover === n.id) && (
                     <text y={n.r + 14} textAnchor="middle" className="fill-foreground text-[11px] font-medium"
                           style={{ paintOrder: "stroke", stroke: "var(--card)", strokeWidth: 4 }}>

@@ -149,12 +149,12 @@ export default function Home() {
         </TiltCard>
 
         <TiltCard>
-          <BentoIcon icon={CreditCardIcon} className="-z-10" tone="text-gold" />
+          <BentoIcon icon={CreditCardIcon} className="-z-10" tone="text-highlight" />
           <p className="text-sm text-muted-foreground">Your bill</p>
           <p className="mt-1 text-2xl font-semibold tracking-tight">{owes ? billing.outstanding_display : "All paid"}</p>
           <p className="text-sm text-muted-foreground">{owes ? (billing.due_display ? `Due ${billing.due_display}` : billing.headline) : "Nothing to pay right now."}</p>
           <div className="mt-5 flex gap-2">
-            {owes && <Button onClick={(e) => setPay(originOf(e))} className="bg-gold text-gold-foreground hover:bg-gold/90">Pay balance</Button>}
+            {owes && <Button onClick={(e) => setPay(originOf(e))} className="bg-highlight text-highlight-foreground hover:bg-highlight/90">Pay balance</Button>}
             <Link href="/app/billing" className={buttonVariants({ variant: "ghost" })}>Bills</Link>
           </div>
         </TiltCard>
@@ -196,7 +196,7 @@ export default function Home() {
 
       {!!notices.data?.notices.length && (
         <section aria-labelledby="known" className="space-y-3">
-          <h2 id="known" className="flex items-center gap-2 font-medium"><SparklesIcon className="size-4 text-gold" /> Happening on our side</h2>
+          <h2 id="known" className="flex items-center gap-2 font-medium"><SparklesIcon className="size-4 text-highlight" /> Happening on our side</h2>
           <Carousel label="Known issues on our side">
             {notices.data.notices.map((n, i) => <NoticeCard key={i} n={n} />)}
           </Carousel>

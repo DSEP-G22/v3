@@ -22,7 +22,7 @@ export type TicketRow = {
 
 const STATUS = {
   open: { word: "Waiting on us", dot: "bg-primary", glow: "shadow-primary/50", pulse: true },
-  answered: { word: "Answered", dot: "bg-gold", glow: "shadow-gold/60", pulse: false },
+  answered: { word: "Answered", dot: "bg-highlight", glow: "shadow-highlight/60", pulse: false },
   closed: { word: "Closed", dot: "bg-muted-foreground/50", glow: "shadow-transparent", pulse: false },
 } as const;
 
@@ -44,7 +44,7 @@ export function TicketRiver({ tickets }: { tickets: TicketRow[] }) {
     <div className="space-y-4">
       <div className="snap-row relative overflow-x-auto rounded-2xl border bg-linear-to-b from-secondary/60 to-card px-6 pt-10 pb-6">
         <div className="relative flex min-w-max items-center gap-10 pr-6">
-          <span aria-hidden className="absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-linear-to-r from-lilac via-primary to-gold opacity-70" />
+          <span aria-hidden className="absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-linear-to-r from-lilac via-primary to-highlight opacity-70" />
           {ordered.map((t, i) => {
             const s = STATUS[t.status] ?? STATUS.open;
             const size = Math.min(44, 18 + t.messages * 3);
@@ -77,7 +77,7 @@ export function TicketRiver({ tickets }: { tickets: TicketRow[] }) {
             <span aria-hidden>·</span>
             Opened {new Date(current.created_at).toLocaleDateString()}
             {current.attachments > 0 && <span className="inline-flex items-center gap-1"><PaperclipIcon className="size-3" />{current.attachments}</span>}
-            {current.rating != null && <span className="inline-flex items-center gap-0.5 text-gold-foreground">{Array.from({ length: current.rating }, (_, i) => <StarIcon key={i} className="size-3 fill-gold text-gold" />)}</span>}
+            {current.rating != null && <span className="inline-flex items-center gap-0.5 text-highlight-foreground">{Array.from({ length: current.rating }, (_, i) => <StarIcon key={i} className="size-3 fill-highlight text-highlight" />)}</span>}
           </div>
           <p className="mt-1 font-medium group-hover:text-primary">{current.subject}</p>
           {current.last_body && (

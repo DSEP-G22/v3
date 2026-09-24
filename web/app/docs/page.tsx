@@ -1,7 +1,6 @@
 import Link from "next/link";
 
 import { DocsNav } from "@/components/docs-nav";
-import { FluidGradient } from "@/components/fx/fluid-gradient";
 import { SiteHeader } from "@/components/site-header";
 
 export const metadata = { title: "How Lanka Link works" };
@@ -56,11 +55,10 @@ export default function Docs() {
     <>
       <SiteHeader />
       <div className="relative isolate">
-        <FluidGradient className="h-[34rem] opacity-80" />
         <header className="mx-auto w-full max-w-6xl px-4 pt-14 pb-10 sm:pt-20">
           <p className="pixel-label text-[17px] text-primary">Documentation</p>
           <h1 className="mt-3 max-w-3xl text-4xl leading-[1.05] font-semibold tracking-tight text-balance sm:text-5xl">
-            How Lanka Link <span className="text-shine font-pixel font-normal">works</span>
+            How Lanka Link <span className="font-pixel font-normal text-primary">works</span>
           </h1>
           <p className="mt-4 max-w-2xl text-base text-muted-foreground sm:text-lg">
             The customer app, the agent console, the admin area and the simulation, and what happens between a

@@ -29,7 +29,7 @@ export type Notice = {
 
 const LOOK: Record<Notice["kind"], { icon: LucideIcon; tint: string; ring: string }> = {
   outage: { icon: TrafficConeIcon, tint: "from-destructive/15 to-transparent", ring: "text-destructive bg-destructive/10" },
-  payment: { icon: CreditCardIcon, tint: "from-gold/30 to-transparent", ring: "text-gold-foreground bg-gold/30" },
+  payment: { icon: CreditCardIcon, tint: "from-highlight/30 to-transparent", ring: "text-highlight-foreground bg-highlight/30" },
   maintenance: { icon: CalendarClockIcon, tint: "from-info/15 to-transparent", ring: "text-info bg-info/10" },
   congestion: { icon: WifiIcon, tint: "from-warning/20 to-transparent", ring: "text-warning bg-warning/15" },
   allowance: { icon: GaugeIcon, tint: "from-primary/15 to-transparent", ring: "text-primary bg-primary/10" },
@@ -105,7 +105,7 @@ export function NoticeCard({ n, className }: { n: Notice; className?: string }) 
               <p className="text-2xl font-semibold tracking-tight">{n.amount}</p>
               {n.due && <p className="text-xs text-muted-foreground">Due since {n.due}</p>}
             </div>
-            {n.action && <Link href={n.action.href} className={buttonVariants({ size: "sm", className: "bg-gold text-gold-foreground hover:bg-gold/90" })}>{n.action.label}</Link>}
+            {n.action && <Link href={n.action.href} className={buttonVariants({ size: "sm", className: "bg-highlight text-highlight-foreground hover:bg-highlight/90" })}>{n.action.label}</Link>}
           </div>
         )}
         {n.kind === "maintenance" && (

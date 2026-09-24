@@ -45,7 +45,7 @@ export function TracesView({ base, title }: { base: string; title: string }) {
   return (
     <div className="space-y-6">
       <div>
-        <p className="pixel-label text-[15px] text-primary">Request processing</p>
+        <p className="text-[11px] font-medium tracking-wider uppercase text-primary">Request processing</p>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight">{title}</h1>
       </div>
       <div className="relative max-w-sm">
@@ -57,7 +57,7 @@ export function TracesView({ base, title }: { base: string; title: string }) {
         <div className="overflow-hidden rounded-2xl border border-foreground/10 bg-card/60 backdrop-blur">
           <Table>
             <TableHeader>
-              <TableRow className="hover:bg-transparent [&_th]:pixel-label [&_th]:text-[14px] [&_th]:text-muted-foreground">
+              <TableRow className="hover:bg-transparent [&_th]:text-[11px] [&_th]:font-medium [&_th]:tracking-wider [&_th]:uppercase [&_th]:text-muted-foreground">
                 <TableHead className="pl-4">Case</TableHead>
                 <TableHead>Summary</TableHead>
                 <TableHead className="max-md:hidden">Department</TableHead>
@@ -88,26 +88,26 @@ export function TracesView({ base, title }: { base: string; title: string }) {
       <Sheet open={open !== null} onOpenChange={(o) => !o && setOpen(null)}>
         <SheetContent className="w-full sm:max-w-xl">
           <SheetHeader>
-            <SheetTitle className="font-pixel text-2xl font-normal">{open}</SheetTitle>
+            <SheetTitle className="text-lg">{open}</SheetTitle>
             <SheetDescription>Every stage, in order, with its time.</SheetDescription>
           </SheetHeader>
           {trace.loading || !trace.data ? <Skeleton className="m-4 h-60 rounded-2xl" /> : (
             <div className="space-y-6 overflow-y-auto px-4 pb-6">
               <div className="flex items-end justify-between rounded-2xl border border-foreground/10 bg-muted/30 p-4">
                 <div>
-                  <p className="pixel-label text-[14px] text-muted-foreground">Stage time, summed</p>
-                  <p className="mt-2 font-pixel text-4xl leading-none"><Count value={total} format={ms} /></p>
+                  <p className="text-[11px] font-medium tracking-wider uppercase text-muted-foreground">Stage time, summed</p>
+                  <p className="mt-2 text-2xl font-semibold tabular-nums leading-none"><Count value={total} format={ms} /></p>
                 </div>
                 <p className="text-right text-xs text-muted-foreground">{trace.data.stages.length} stages<br />revision {trace.data.case.revision}</p>
               </div>
               <ol ref={bars} className="space-y-2.5">
                 {trace.data.stages.map((s, i) => (
                   <li key={i} className="grid grid-cols-[1.5rem_7rem_1fr_4.5rem] items-center gap-2 text-sm">
-                    <span className="font-pixel text-base leading-none text-muted-foreground">{String(i + 1).padStart(2, "0")}</span>
+                    <span className="text-xs font-medium tabular-nums leading-none text-muted-foreground">{String(i + 1).padStart(2, "0")}</span>
                     <span className="truncate capitalize">{s.stage.replace(/_/g, " ")}</span>
                     <span className="h-2 overflow-hidden rounded-full bg-muted">
                       <span data-bar className={cn("block h-2 origin-left rounded-full",
-                        s.status === "done" ? "bg-linear-to-r from-primary to-lilac" : "bg-destructive")}
+                        s.status === "done" ? "bg-primary" : "bg-destructive")}
                             style={{ width: `${Math.max(2, ((s.ms ?? 0) / max) * 100)}%` }} />
                     </span>
                     <span className="text-right text-xs tabular-nums text-muted-foreground">{s.ms != null ? `${s.ms} ms` : s.status}</span>

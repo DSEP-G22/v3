@@ -109,7 +109,7 @@ function Lab() {
   return (
     <div className="space-y-4">
       <div>
-        <p className="pixel-label text-[15px] text-primary">Request processing</p>
+        <p className="text-[11px] font-medium tracking-wider uppercase text-primary">Request processing</p>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight">Test lab</h1>
       </div>
       <div className="grid gap-4 lg:grid-cols-[22rem_1fr]">
@@ -170,13 +170,13 @@ function Lab() {
                 <span className={`size-2 rounded-full ${events.length ? "animate-pulse bg-success" : "bg-muted-foreground/40"}`} aria-hidden />
                 Live timeline
               </CardTitle>
-              <CardDescription className="font-pixel text-base">{caseId ?? "Nothing sent yet"}</CardDescription>
+              <CardDescription className="text-xs tabular-nums">{caseId ?? "Nothing sent yet"}</CardDescription>
             </CardHeader>
             <CardContent>
               <ol className="space-y-2 text-sm">
                 {events.map((e, i) => (
                   <li key={i} className="grid animate-in grid-cols-[4.5rem_1fr] gap-3 duration-500 fade-in slide-in-from-left-1">
-                    <span className="font-pixel text-base leading-5 text-muted-foreground">+{((e.at - started) / 1000).toFixed(1)} s</span>
+                    <span className="text-xs tabular-nums leading-5 text-muted-foreground">+{((e.at - started) / 1000).toFixed(1)} s</span>
                     <span className="relative border-l border-foreground/10 pl-4">
                       <span aria-hidden className={`absolute top-1.5 -left-[4.5px] size-2 rounded-full ring-4 ring-card ${i === events.length - 1 ? "bg-primary" : "bg-muted-foreground/50"}`} />
                       {e.text}

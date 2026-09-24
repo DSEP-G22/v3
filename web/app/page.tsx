@@ -30,13 +30,13 @@ const HORIZON = "radial-gradient(70% 100% at 50% 100%, oklch(0.95 0.04 305) 0%, 
 const BTN = "pixel-label inline-flex h-10 items-center gap-2 rounded-full px-5 text-[17px] transition-[background-color,box-shadow,transform] duration-300 active:scale-[0.98]";
 const LIGHT = cn(BTN, "bg-white text-black shadow-[0_0_0_1px_rgba(255,255,255,0.4),0_8px_24px_-8px_rgba(255,255,255,0.5)] hover:shadow-[0_0_0_1px_rgba(255,255,255,0.6),0_10px_32px_-6px_oklch(0.8_0.12_300)]");
 const DARK = cn(BTN, "border border-white/15 bg-black/60 text-white backdrop-blur hover:bg-white/10");
-/** An accent word: VT323 in the gold to violet shine. */
+/** An accent word: VT323 in the violet to lilac shine. */
 const ACCENT = "text-shine font-pixel font-normal tracking-normal";
 
 function Tag({ children }: { children: React.ReactNode }) {
   return (
     <span className="pixel-label inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[15px] text-white/75 backdrop-blur">
-      <span className="size-1.5 animate-pulse rounded-full bg-gold" />{children}
+      <span className="size-1.5 animate-pulse rounded-full bg-highlight" />{children}
     </span>
   );
 }
@@ -150,7 +150,7 @@ export default async function Landing() {
               {DOES.map((d) => (
                 <article key={d.k} data-reveal className="group">
                   <Art src={d.art} alt="" className="aspect-[4/3]" />
-                  <p className="pixel-label mt-5 text-[15px] text-gold/80">{d.k}</p>
+                  <p className="pixel-label mt-5 text-[15px] text-highlight/80">{d.k}</p>
                   <h3 className="mt-2 text-xl font-medium text-white">{d.title}</h3>
                   <p className="mt-2 text-sm leading-relaxed text-white/55">{d.rest}</p>
                 </article>

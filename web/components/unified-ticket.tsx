@@ -40,7 +40,7 @@ function Bar({ label, p }: Cls) {
     <div className="grid grid-cols-[9rem_1fr_3rem] items-center gap-2 text-xs">
       <span className="truncate">{label.replace(/[-_]/g, " ")}</span>
       <span className="h-1.5 overflow-hidden rounded-full bg-muted">
-        <span className="block h-full rounded-full bg-linear-to-r from-primary to-gold" style={{ width: `${Math.round(p * 100)}%` }} />
+        <span className="block h-full rounded-full bg-linear-to-r from-primary to-highlight" style={{ width: `${Math.round(p * 100)}%` }} />
       </span>
       <span className="text-right tabular-nums text-muted-foreground">{Math.round(p * 100)}%</span>
     </div>

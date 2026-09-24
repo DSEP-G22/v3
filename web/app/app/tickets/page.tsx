@@ -80,7 +80,7 @@ export default function Tickets() {
               {shown.map((t) => (
                 <li key={t.id}>
                   <Link href={`/app/tickets/${t.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-muted/50">
-                    <span className={cn("size-2 shrink-0 rounded-full", t.status === "open" ? "bg-primary" : t.status === "answered" ? "bg-gold" : "bg-muted-foreground/40")} />
+                    <span className={cn("size-2 shrink-0 rounded-full", t.status === "open" ? "bg-primary" : t.status === "answered" ? "bg-highlight" : "bg-muted-foreground/40")} />
                     <span className="min-w-0 flex-1 truncate">{t.subject}</span>
                     <span className="shrink-0 text-xs text-muted-foreground">{new Date(t.updated_at).toLocaleDateString()}</span>
                   </Link>
