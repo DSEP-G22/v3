@@ -11,7 +11,7 @@ import { FocusLayer, originOf, type Origin } from "@/components/fx/focus-layer";
 import { TiltCard } from "@/components/fx/tilt-card";
 import { NoticeCard, type Notice } from "@/components/notice-card";
 import { PayDialog } from "@/components/pay-dialog";
-import { type TicketRow } from "@/components/ticket-river";
+import { type TicketRow } from "@/components/ticket-list";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { post, useApi, useEvents } from "@/lib/api";
