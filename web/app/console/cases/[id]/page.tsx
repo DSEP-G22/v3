@@ -38,7 +38,10 @@ type CaseDetail = {
     sla_display: string; completeness: Record<string, unknown> } | null;
   payload: { stages: Stages } | null;
   bundle: Bundle | null;
+  transcripts?: Record<string, Heard>;
 };
+type Heard = { text?: string; text_en?: string; language?: string; confidence?: number; low_confidence?: boolean;
+  failed?: boolean; note?: string };
 
 const LANGS = [
   { value: "si", label: "Sinhala" }, { value: "si-Latn", label: "Singlish" },
@@ -106,6 +109,11 @@ export default function CasePage() {
   if (loading || !data) return <Skeleton className="h-[70svh]" />;
   const c = data.case;
   const messages = data.conversation?.messages ?? [];
+  // Older cases stored no attachment ids with their transcripts; the unified ticket still has them.
+  const heard: Record<string, Heard> = {
+    ...Object.fromEntries((data.bundle?.payload.transcripts ?? []).map((t) => [(t as { attachment_id?: string }).attachment_id, t])),
+    ...data.transcripts,
+  };
 
   return (
     <div className="space-y-4">
@@ -161,7 +169,10 @@ export default function CasePage() {
                 {m.attachments?.length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-2">
                     {m.attachments.map((a) => (
-                      <SentAttachment key={a.id} att={a} alt="Photo from the customer" />
+                      <div key={a.id} className="space-y-1">
+                        <SentAttachment att={a} alt="Photo from the customer" />
+                        {a.kind === "audio" && <VoiceText t={heard[a.id]} />}
+                      </div>
                     ))}
                   </div>
                 )}
@@ -323,6 +334,24 @@ export default function CasePage() {
           <Link href="/console" className={buttonVariants({ variant: "link", className: "px-0" })}>Back to inbox</Link>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** What the speech model heard in one voice note, or why there is nothing to read. */
+function VoiceText({ t }: { t: Heard | undefined }) {
+  if (!t) return <p className="text-xs text-muted-foreground">No transcript yet.</p>;
+  if (t.failed) return <p className="text-xs text-destructive">Could not transcribe this voice note in time.</p>;
+  if (!t.text) return <p className="text-xs text-muted-foreground">{t.note ? `Not transcribed: ${t.note}.` : "No speech heard."}</p>;
+  return (
+    <div className="max-w-md rounded-md bg-muted/60 p-2 text-sm">
+      <p className="text-xs text-muted-foreground">
+        Transcript{t.language ? `, ${LANG_WORD[t.language] ?? t.language}` : ""}
+        {t.confidence != null ? `, ${Math.round(t.confidence * 100)}% sure` : ""}
+        {t.low_confidence ? " (low confidence)" : ""}
+      </p>
+      <p className="whitespace-pre-line">{t.text}</p>
+      {t.text_en && t.text_en !== t.text && <p className="mt-1 whitespace-pre-line text-muted-foreground">English: {t.text_en}</p>}
     </div>
   );
 }

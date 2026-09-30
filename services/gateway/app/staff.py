@@ -58,6 +58,16 @@ async def queue(tab: str = "needs_approval", q: str = "") -> dict[str, Any]:
     return data
 
 
+class Dismiss(BaseModel):
+    ids: list[str]
+
+
+@console.post("/cases/dismiss")
+async def dismiss(body: Dismiss, p: Principal) -> Any:
+    """Clear test and junk requests out of the inbox, one or many at once."""
+    return await _upstream("POST", f"{ORCHESTRATOR_URL}/cases/dismiss", json={"ids": body.ids, "actor": _actor(p)})
+
+
 @console.get("/cases/{case_id}")
 async def case(case_id: str) -> dict[str, Any]:
     detail = await _upstream("GET", f"{ORCHESTRATOR_URL}/cases/{case_id}")

@@ -18,7 +18,7 @@ import json
 import os
 import re
 import time
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterable
 from datetime import datetime, timezone
 from typing import Any
 
@@ -268,7 +268,9 @@ async def _run(ev: dict[str, Any], case_id: str, rev: int) -> dict[str, Any]:
         """INSERT INTO cases.payload (case_id, revision, fused_text, provenance, flags, partial, stages)
            VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (case_id, revision) DO NOTHING""",
         case_id, rev, fused_text, json.dumps(provenance), ev["flags"], partial,
-        json.dumps({"visual": visuals, "transcripts": transcripts}, default=str),
+        # Keyed by attachment, a failed one included, so staff see each voice note's text under it.
+        json.dumps({"visual": visuals, "transcripts": [{**(t or {"failed": True}), "attachment_id": a["id"]}
+                                                       for a, t in zip(audio, transcripts)]}, default=str),
     )
     await _set(case_id, state="AGGREGATED", language=language)
     if language not in ("en", None):
@@ -410,7 +412,7 @@ def _row(r: asyncpg.Record) -> dict[str, Any]:
 TABS = {
     "needs_approval": "state = 'AWAITING_APPROVAL' AND closed_at IS NULL",
     "open": "closed_at IS NULL AND state <> 'RESOLVED'",
-    "all": "true",
+    "all": "state <> 'DISMISSED'",
 }
 
 
@@ -430,9 +432,28 @@ async def cases(tab: str = "open", origin: str = "customer", limit: int = 100, q
     )
     counts = await rt.pool.fetchrow(
         f"""SELECT count(*) FILTER (WHERE {TABS['needs_approval']}) AS needs_approval,
-                   count(*) FILTER (WHERE {TABS['open']}) AS open, count(*) AS all
+                   count(*) FILTER (WHERE {TABS['open']}) AS open, count(*) FILTER (WHERE {TABS['all']}) AS all
             FROM cases."case" WHERE origin = $1""", origin)
     return {"cases": [_row(r) for r in rows], "counts": dict(counts)}
+
+
+class Dismiss(BaseModel):
+    ids: list[str]
+    actor: str
+
+
+@app.post("/cases/dismiss")
+async def dismiss(body: Dismiss) -> dict[str, Any]:
+    """Clear test and junk requests from every inbox tab. The rows stay (stats and audit keep them
+    out by state); the case is closed, so a new message from that customer opens a fresh one."""
+    rows = await rt.pool.fetch(
+        """UPDATE cases."case" SET state = 'DISMISSED', closed_at = coalesce(closed_at, now()), updated_at = now()
+           WHERE id = ANY($1::text[]) AND state <> 'DISMISSED' RETURNING id, revision""", body.ids)
+    for r in rows:
+        if run_ := rt.runs.get(r["id"]):
+            run_[1].cancel()
+        _record(r["id"], r["revision"], "dismissed", "done", by=body.actor)
+    return {"dismissed": [r["id"] for r in rows]}
 
 
 @app.get("/stats")
@@ -443,14 +464,14 @@ async def stats(hours: int = 24) -> dict[str, Any]:
                   percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM replied_at - opened_at))
                       FILTER (WHERE replied_at IS NOT NULL) AS median_reply_s,
                   avg((approval_status = 'auto_approved')::int) FILTER (WHERE replied_at IS NOT NULL) AS auto_share
-           FROM cases."case" WHERE origin = 'customer' AND opened_at > now() - make_interval(hours => $1)""", hours)
+           FROM cases."case" WHERE origin = 'customer' AND state <> 'DISMISSED' AND opened_at > now() - make_interval(hours => $1)""", hours)
     p95 = await rt.pool.fetchval(
         """SELECT percentile_cont(0.95) WITHIN GROUP (ORDER BY total) FROM (
                SELECT case_id, revision, sum(ms) AS total FROM cases.stage_event
                WHERE at > now() - make_interval(hours => $1) AND stage <> 'response' GROUP BY case_id, revision) t""", hours)
     series = await rt.pool.fetch(
         """SELECT date_trunc('hour', opened_at) AS hour, count(*) AS opened FROM cases."case"
-           WHERE origin = 'customer' AND opened_at > now() - make_interval(hours => $1) GROUP BY 1 ORDER BY 1""", hours)
+           WHERE origin = 'customer' AND state <> 'DISMISSED' AND opened_at > now() - make_interval(hours => $1) GROUP BY 1 ORDER BY 1""", hours)
     return {"open_cases": row["open_cases"], "median_reply_s": row["median_reply_s"],
             "auto_share": row["auto_share"], "p95_pipeline_ms": p95,
             "series": [{"hour": r["hour"].isoformat(), "opened": r["opened"]} for r in series]}
@@ -469,15 +490,28 @@ async def escalate(case_id: str, actor: str) -> dict[str, Any]:
 
 @app.get("/cases/{case_id}")
 async def case(case_id: str) -> dict[str, Any]:
-    # Three independent reads at once: one database round trip instead of three.
-    row, events, payload = await asyncio.gather(
+    # Independent reads at once: one database round trip instead of several.
+    row, events, payload, heard = await asyncio.gather(
         rt.pool.fetchrow('SELECT * FROM cases."case" WHERE id = $1', case_id),
         rt.pool.fetch("SELECT * FROM cases.stage_event WHERE case_id = $1 ORDER BY id", case_id),
         rt.pool.fetchrow("SELECT * FROM cases.payload WHERE case_id = $1 ORDER BY revision DESC LIMIT 1", case_id),
+        rt.pool.fetch("SELECT stages->'transcripts' AS t FROM cases.payload WHERE case_id = $1 ORDER BY revision", case_id),
     )
     if row is None:
         raise HTTPException(404, "No such case.")
-    return {"case": _row(row), "stages": [_row(e) for e in events], "payload": _row(payload) if payload else None}
+    return {"case": _row(row), "stages": [_row(e) for e in events], "payload": _row(payload) if payload else None,
+            "transcripts": _transcripts(r["t"] for r in heard)}
+
+
+def _transcripts(per_revision: Iterable[Any]) -> dict[str, dict[str, Any]]:
+    """Every voice note's transcript on the case, by attachment id; a later revision (a language
+    re-run, say) replaces an earlier one. Rows written before ids were stored are skipped."""
+    out: dict[str, dict[str, Any]] = {}
+    for ts in per_revision:
+        for t in (json.loads(ts) if isinstance(ts, str) else ts) or []:
+            if t and t.get("attachment_id"):
+                out[t["attachment_id"]] = t
+    return out
 
 
 #: Languages staff may set by hand: what the customer actually wrote in.

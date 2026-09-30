@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 
 import { PriorityPair, type SidePriority } from "@/components/priority-pair";
 import { StatusDot } from "@/components/status-dot";
@@ -10,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useApi } from "@/lib/api";
+import { post, useApi } from "@/lib/api";
 import { department, priority, STATE_WORD, waiting } from "@/lib/format";
 
 type Row = {
@@ -37,6 +38,35 @@ export default function Inbox() {
   const router = useRouter();
   const [tab, setTab] = useState<string>("needs_approval");
   const { data, loading, reload } = useApi<Queue>(`/console/cases?tab=${tab}`);
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [clearing, setClearing] = useState(false);
+  const shown = data?.cases ?? [];
+  const allPicked = shown.length > 0 && shown.every((c) => picked.has(c.id));
+
+  function toggle(id: string) {
+    setPicked((s) => {
+      const n = new Set(s);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  }
+
+  // Test and junk requests leave every tab; the customer is not told, and a new message opens a new case.
+  async function clear(ids: string[]) {
+    if (!ids.length || !confirm(`Clear ${ids.length === 1 ? "this case" : `${ids.length} cases`} from the inbox?`)) return;
+    setClearing(true);
+    try {
+      const r = await post<{ dismissed: string[] }>("/console/cases/dismiss", { ids });
+      toast.success(`Cleared ${r.dismissed.length} ${r.dismissed.length === 1 ? "case" : "cases"}`);
+      setPicked(new Set());
+      await reload();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setClearing(false);
+    }
+  }
 
   // Fresh whenever the agent comes back to the tab; no background polling.
   useEffect(() => {
@@ -47,13 +77,24 @@ export default function Inbox() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <h1 className="text-xl font-semibold tracking-tight">Inbox</h1>
-        <Button variant="ghost" size="sm" onClick={() => void reload()}>
-          Refresh
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          {picked.size > 0 && (
+            <Button variant="destructive" size="sm" disabled={clearing} onClick={() => void clear([...picked])}>
+              Clear {picked.size} selected
+            </Button>
+          )}
+          <Button variant="outline" size="sm" disabled={clearing || !shown.length}
+                  onClick={() => void clear(shown.map((c) => c.id))}>
+            Clear all shown
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => void reload()}>
+            Refresh
+          </Button>
+        </div>
       </div>
-      <Tabs value={tab} onValueChange={(v) => setTab(String(v))}>
+      <Tabs value={tab} onValueChange={(v) => { setTab(String(v)); setPicked(new Set()); }}>
         <TabsList>
           {TABS.map((t) => (
             <TabsTrigger key={t.value} value={t.value}>
@@ -74,9 +115,11 @@ export default function Inbox() {
         {/* A phone gets one card per case; the table needs a wider screen. */}
         <ul className="space-y-2 md:hidden">
           {data.cases.map((c) => (
-            <li key={c.id}>
+            <li key={c.id} className="flex items-start gap-2">
+              <input type="checkbox" checked={picked.has(c.id)} onChange={() => toggle(c.id)}
+                     aria-label={`Select ${c.id}`} className="mt-4 size-4 shrink-0 accent-primary" />
               <button type="button" onClick={() => router.push(`/console/cases/${c.id}`)}
-                      className="w-full space-y-2 rounded-xl border bg-card p-3 text-left transition-colors active:bg-muted">
+                      className="min-w-0 flex-1 space-y-2 rounded-xl border bg-card p-3 text-left transition-colors active:bg-muted">
                 <span className="flex items-start justify-between gap-3">
                   <span className="min-w-0">
                     <span className="block truncate font-medium">{c.customer}</span>
@@ -99,6 +142,10 @@ export default function Inbox() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-8">
+                  <input type="checkbox" checked={allPicked} aria-label="Select every case shown" className="size-4 accent-primary"
+                         onChange={() => setPicked(allPicked ? new Set() : new Set(shown.map((c) => c.id)))} />
+                </TableHead>
                 <TableHead>Customer</TableHead>
                 <TableHead>Summary</TableHead>
                 <TableHead>Department</TableHead>
@@ -109,7 +156,12 @@ export default function Inbox() {
             </TableHeader>
             <TableBody>
               {data.cases.map((c) => (
-                <TableRow key={c.id} className="cursor-pointer" onClick={() => router.push(`/console/cases/${c.id}`)}>
+                <TableRow key={c.id} className="cursor-pointer" data-state={picked.has(c.id) ? "selected" : undefined}
+                          onClick={() => router.push(`/console/cases/${c.id}`)}>
+                  <TableCell onClick={(e) => e.stopPropagation()}>
+                    <input type="checkbox" checked={picked.has(c.id)} onChange={() => toggle(c.id)}
+                           aria-label={`Select ${c.id}`} className="size-4 accent-primary" />
+                  </TableCell>
                   <TableCell className="font-medium">
                     {c.customer}
                     <span className="block text-xs font-normal text-muted-foreground">{c.id}</span>
