@@ -25,7 +25,7 @@ type Event = { id: string; role: string; from_binding: string; to_binding: strin
 /** The pipeline, left to right. Ids match the gateway's NODES. */
 const STAGES: { id: string; label: string; service: string; role?: string; model: string; col: number; row: number; does: string }[] = [
   { id: "intake", label: "Intake", service: "inquiry", model: "Validation rules", col: 0, row: 1.5, does: "Stores the ticket, its photos and voice notes, and opens a case." },
-  { id: "speech", label: "Speech", service: "audio", role: "speech", model: "faster-whisper small", col: 1.3, row: 0, does: "Transcribes voice notes in the language they were spoken, then hands the text to translation." },
+  { id: "speech", label: "Speech", service: "audio", role: "speech", model: "Whisper small + Sinhala run11 int8", col: 1.3, row: 0, does: "Transcribes voice notes in the language they were spoken, then hands the text to translation." },
   { id: "translate", label: "Translate in", service: "translation", role: "mt_in", model: "NLLB 600M", col: 2.6, row: 0.75, does: "Reads everything the customer said into English: what they typed and what speech transcribed, in Sinhala, Tamil, Singlish or Tanglish." },
   { id: "vision", label: "Photo", service: "image", model: "Router classifier (ONNX)", col: 1.3, row: 2, does: "Recognises which part of the router a photo shows and which lights are lit." },
   { id: "prefetch", label: "Account", service: "business", model: "Account and network record", col: 1.3, row: 3, does: "Fetches the customer's line, bill and area in parallel." },
@@ -82,7 +82,8 @@ const MODELS: Record<string, string[]> = {
   nllb: ["facebook/nllb-200-distilled-600M"],
   google: ["google-translate"],
   passthrough: ["none"],
-  whisper: ["faster-whisper-small-int8"],
+  // Sinhala model the audio service swaps in live; the last is the base model alone.
+  whisper: ["whisper-small-si-run11-int8", "whisper-small-si-185k-int8", "faster-whisper-small-int8"],
 };
 
 /** The details window's halo: the glow box's light, outside the window. */

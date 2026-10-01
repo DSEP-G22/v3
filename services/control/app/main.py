@@ -43,8 +43,10 @@ ROLES: dict[str, tuple[str, str, tuple[str, ...], str, str, dict[str, Any]]] = {
               ("nllb", "google", "passthrough"), "nllb", "facebook/nllb-200-distilled-600M", {}),
     "mt_out": ("translation", "Translate the approved reply into the customer's language.",
                ("nllb", "google", "passthrough"), "nllb", "facebook/nllb-200-distilled-600M", {}),
+    # model_version picks the Sinhala model, swapped live by the audio service (its SINHALA_MODELS);
+    # faster-whisper-small-int8 is the base model alone.
     "speech": ("translation", "Transcribe voice notes in the language they were spoken.",
-               ("whisper",), "whisper", "faster-whisper-small-int8", {}),
+               ("whisper",), "whisper", "whisper-small-si-run11-int8", {}),
 }
 DEPARTMENTS = ("default", "network_operations", "technical_support", "billing", "field_service", "retention",
                "sales", "general")
@@ -98,6 +100,11 @@ async def _seed() -> None:
                 impl = os.environ["LANKA_LLM_IMPL"]  # CI and load tests seed the offline stub
             await conn.execute("""INSERT INTO control.model_binding (role, impl, model_version, params)
                                   VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING""", role, impl, model, json.dumps(params))
+        # The first seed bound speech to the base model alone; move it to the Sinhala default
+        # once, unless an admin has chosen since.
+        await conn.execute("""UPDATE control.model_binding SET model_version = $1, generation = generation + 1
+                              WHERE role = 'speech' AND model_version = 'faster-whisper-small-int8'
+                                AND updated_by = 'seed'""", ROLES["speech"][4])
         for dept in DEPARTMENTS:
             await conn.execute("""INSERT INTO control.autoreply_policy (department, enabled, min_completeness,
                                   max_priority_level, require_clean_compliance, allow_with_action)

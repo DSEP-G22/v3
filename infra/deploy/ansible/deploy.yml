@@ -65,6 +65,12 @@
         mode: "0600"
       no_log: true
 
+    # Room first: a week of sha-tagged releases filled the disk mid-pull (1 Oct 2026). Only images
+    # no container uses go; the running stack keeps its own, and any release can be pulled again.
+    - name: Free the disk of images no container uses
+      command: docker image prune -af
+      changed_when: false
+
     - name: Pull the new images
       command: "{{ compose }} pull --quiet"
       args: { chdir: "{{ root }}" }

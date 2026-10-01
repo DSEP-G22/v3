@@ -274,6 +274,8 @@ services:
     environment:
       INQUIRY_URL: http://inquiry:8000
       TRANSLATE_URL: http://translation:8000
+      # The speech binding picks the Sinhala model; the service re-reads it every 10 s (hot swap).
+      CONTROL_URL: http://control:8000
       OMP_NUM_THREADS: "${MODEL_CPUS:-4}"
     cpus: ${MODEL_CPUS:-4}
     restart: unless-stopped
