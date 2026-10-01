@@ -20,7 +20,7 @@ test("an operator lands in the simulation panel", async ({ page }) => {
 test("a wrong password is refused in plain words", async ({ page }) => {
   await page.goto("/sign-in");
   await page.getByLabel("Email").fill(STAFF.agent);
-  await page.getByLabel("Password").fill("not-the-password");
+  await page.getByLabel("Password", { exact: true }).fill("not-the-password");
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page.getByText("That email and password do not match.")).toBeVisible();
 });
@@ -29,7 +29,7 @@ test("sign up with email reaches onboarding", async ({ page }) => {
   await page.goto("/sign-up");
   await page.getByLabel("Full name").fill("Playwright Customer");
   await page.getByLabel("Email").fill(`pw-${Date.now()}@example.com`);
-  await page.getByLabel("Password").fill("Correct#Horse9");
+  await page.getByLabel("Password", { exact: true }).fill("Correct#Horse9");
   await page.getByRole("button", { name: "Create account" }).click();
   await expect(page).toHaveURL(/\/onboarding/);
 });
