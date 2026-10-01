@@ -99,3 +99,40 @@ def headline(bundle: ContextBundle) -> str:
     if len(causes) == 1:
         return causes[0]["headline"] + "."
     return f"{causes[0]['headline']}, and {causes[1]['headline'].lower()}."
+
+
+#: What a diagnosed fault that is not clearly on either side sounds like, for the "unclear" verdict.
+FAULT_WORDS: dict[str, str] = {
+    "fault_line_sync": "the line not connecting",
+    "fault_intermittent_connection": "a connection that drops on and off",
+    "fault_service_suspended": "a suspended service",
+    "fault_billing_dispute": "a charge they dispute",
+    "fault_no_coverage": "no mobile signal",
+    "fault_no_dial_tone": "no dial tone on the landline",
+}
+
+
+def cause(bundle: ContextBundle) -> dict[str, Any]:
+    """Which side the problem comes from, for the agent: theirs (equipment at the premises), ours
+    (account, network, billing), both, or unclear. Built from the confirmed causes, with the
+    risks listed as possible contributors, so the agent sees the breakdown and not only a headline."""
+    items = summarise(bundle)
+    theirs = [f["headline"] for f in items if f["severity"] == "cause" and f["side"] == "customer"]
+    ours = [f["headline"] for f in items if f["severity"] == "cause" and f["side"] == "provider"]
+    possible = [f["headline"] for f in items if f["severity"] == "risk"]
+    if theirs and ours:
+        side, summary = "both", (f"Both sides. On their side: {theirs[0].lower()}. On our side: {ours[0].lower()}, "
+                                 "which also stops the service, so fixing their side alone will not restore it.")
+    elif theirs:
+        side, summary = "customer", f"Their side. {theirs[0]}. Nothing in our records is wrong."
+    elif ours:
+        side, summary = "provider", f"Our side. {ours[0]}. Nothing points at their own equipment."
+    else:
+        fault = (bundle.diagnosis.fault if bundle.diagnosis else None) or ""
+        heard = FAULT_WORDS.get(fault) or fault.removeprefix("fault_").replace("_", " ")
+        side = "unclear"
+        summary = (f"Unclear. What they describe sounds like {heard}, but no record confirms it on either side."
+                   if heard else "Unclear. Nothing in the record explains this. Read what they wrote.")
+        if possible:
+            summary += f" Worth checking: {possible[0].lower()}."
+    return {"side": side, "summary": summary, "customer": theirs, "provider": ours, "possible": possible}

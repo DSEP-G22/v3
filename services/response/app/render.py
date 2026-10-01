@@ -112,7 +112,9 @@ def render_causes(b: ContextBundle, side: str = "provider") -> str:
         # What a photo shows outranks any procedure about a different part of the router.
         for v in b.payload.visual_summaries:
             if v.summary_text:
-                lines.insert(0, f"  - {v.summary_text} Every step you give must be about that part of the router.")
+                # A described photo (the classifier did not know it) may not show the router at all.
+                tail = "" if v.summary_text.startswith("Photo description:") else                     " Every step you give must be about that part of the router."
+                lines.insert(0, f"  - {v.summary_text}{tail}")
         return "\n".join(lines) or "  Nothing they sent or our records point at their own equipment."
     return "\n".join(lines) or "  Nothing in the operator records is wrong on our side."
 

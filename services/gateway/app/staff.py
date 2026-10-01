@@ -49,10 +49,15 @@ def _actor(p: dict[str, Any]) -> str:
 
 
 @console.get("/cases")
-async def queue(tab: str = "needs_approval", q: str = "") -> dict[str, Any]:
-    data = await _upstream("GET", f"{ORCHESTRATOR_URL}/cases", params={"tab": tab, "q": q})
-    ids = ",".join({c["subscriber_id"] for c in data["cases"] if c.get("subscriber_id")})
-    names = await _upstream("GET", f"{BUSINESS_URL}/subscribers/names", params={"ids": ids}) if ids else {}
+async def queue(tab: str = "needs_approval", q: str = "", limit: int = 100) -> dict[str, Any]:
+    data = await _upstream("GET", f"{ORCHESTRATOR_URL}/cases", params={"tab": tab, "q": q, "limit": limit})
+    # Names in chunks of 200: the business service caps one lookup there, and "show all" asks for more.
+    ids = sorted({c["subscriber_id"] for c in data["cases"] if c.get("subscriber_id")})
+    names: dict[str, str] = {}
+    for part in await asyncio.gather(*(_upstream("GET", f"{BUSINESS_URL}/subscribers/names",
+                                                 params={"ids": ",".join(ids[i:i + 200])})
+                                       for i in range(0, len(ids), 200))):
+        names.update(part)
     for c in data["cases"]:
         c["customer"] = names.get(c.get("subscriber_id") or "", "Unknown customer")
     return data

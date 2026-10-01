@@ -43,3 +43,6 @@ PLAN.md
 HANDOFF.md
 # Test plan runs (scripts/test-plan.sh); the report that quotes one lives in docs/test-report/
 reports/
+
+# Per-release change notes kept locally (docs/changes/), not published with the repo
+docs/changes/

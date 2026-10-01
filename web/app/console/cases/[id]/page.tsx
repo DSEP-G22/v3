@@ -33,13 +33,14 @@ type CaseDetail = {
   stages: { stage: string; status: string; ms: number | null; revision: number }[];
   conversation: { messages: Msg[] } | null;
   drafts: Draft[];
-  grounding: { headline: string; findings: Finding[]; priority: { reasons: { detail: string; move: number }[] };
+  grounding: { headline: string; findings: Finding[]; cause?: Cause; priority: { reasons: { detail: string; move: number }[] };
     customer_priority: SidePriority; provider_priority: SidePriority;
     sla_display: string; completeness: Record<string, unknown> } | null;
   payload: { stages: Stages } | null;
   bundle: Bundle | null;
   transcripts?: Record<string, Heard>;
 };
+type Cause = { side: "customer" | "provider" | "both" | "unclear"; summary: string };
 type Heard = { text?: string; text_en?: string; language?: string; confidence?: number; low_confidence?: boolean;
   failed?: boolean; note?: string };
 
@@ -51,6 +52,8 @@ const LANG_WORD: Record<string, string> = { en: "English", si: "Sinhala", ta: "T
 
 const SEND_BACK = ["Facts are wrong", "Tone needs work", "Wrong action", "Needs a person to call"];
 const SEVERITY_TONE = { cause: "bad", risk: "warn", context: "idle" } as const;
+const CAUSE_WORD = { customer: "Their side", provider: "Our side", both: "Both sides", unclear: "Not yet clear" } as const;
+const SEVERITY_WORD: Record<string, string> = { cause: "Cause", risk: "Could contribute", context: "Good to know" };
 
 export default function CasePage() {
   const { id } = useParams<{ id: string }>();
@@ -187,19 +190,38 @@ export default function CasePage() {
               <CardDescription>What we found</CardDescription>
               <CardTitle className="text-base">{data.grounding?.headline ?? "Still checking the record."}</CardTitle>
             </CardHeader>
-            {!!data.grounding?.findings.length && (
-              <CardContent>
-                <ul className="space-y-2">
-                  {data.grounding.findings.slice(0, 3).map((f) => (
-                    <li key={f.signal}>
-                      <span className="mr-2 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                        {f.side === "customer" ? "Their side" : "Our side"}
-                      </span>
-                      <StatusDot tone={SEVERITY_TONE[f.severity as keyof typeof SEVERITY_TONE] ?? "idle"} label={f.headline} />
-                      <p className="ml-4 text-sm text-muted-foreground">{f.detail}</p>
-                    </li>
-                  ))}
-                </ul>
+            {data.grounding && (
+              <CardContent className="space-y-3">
+                {data.grounding.cause && (
+                  <p className="rounded-md bg-muted/60 p-2 text-sm">
+                    <span className="mr-2 font-medium">{CAUSE_WORD[data.grounding.cause.side]}</span>
+                    <span className="text-muted-foreground">{data.grounding.cause.summary}</span>
+                  </p>
+                )}
+                {/* Every finding, split by where it comes from: their equipment, or our records. */}
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {(["customer", "provider"] as const).map((side) => {
+                    const items = data.grounding!.findings.filter((f) => (f.side ?? "provider") === side);
+                    return (
+                      <section key={side} className="rounded-lg border p-3">
+                        <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                          {side === "customer" ? "Their side, equipment at the premises" : "Our side, account and network"}
+                        </h3>
+                        {items.length ? (
+                          <ul className="space-y-2">
+                            {items.map((f) => (
+                              <li key={f.signal}>
+                                <StatusDot tone={SEVERITY_TONE[f.severity as keyof typeof SEVERITY_TONE] ?? "idle"}
+                                           label={`${SEVERITY_WORD[f.severity] ?? f.severity}: ${f.headline}`} />
+                                <p className="ml-4 text-sm text-muted-foreground">{f.detail}</p>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : <p className="text-sm text-muted-foreground">Nothing found.</p>}
+                      </section>
+                    );
+                  })}
+                </div>
               </CardContent>
             )}
           </Card>

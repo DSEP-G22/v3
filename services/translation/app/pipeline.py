@@ -6,6 +6,7 @@ from import paths), plus outbound translation for replies that keeps the sign-of
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 from app.lang.detect import detect
@@ -23,6 +24,8 @@ from app.translate import Translator
 
 #: The operator's name is never machine translated (it came back as a spoofed-looking sender).
 SIGN_OFF = "Lanka Link customer support"
+#: "1. ", "2) " or "- " opening a line of the reply.
+_MARKER = re.compile(r"^\s*(?:\d{1,2}[.)]|[-*])\s+")
 
 
 @dataclass(frozen=True)
@@ -73,5 +76,15 @@ class TranslationService:
         body, sign = text, ""
         if text.rstrip().endswith(SIGN_OFF):
             body, sign = text.rstrip()[: -len(SIGN_OFF)].rstrip(), SIGN_OFF
-        out = self.translator.translate(body, LanguageCode.EN, target).translated_text
+        out = "\n".join(self._line(line, target) for line in body.split("\n"))
         return (f"{out}\n\n{sign}" if sign else out), out != body
+
+    def _line(self, line: str, target: LanguageCode) -> str:
+        """One line at a time, so paragraphs and numbered steps keep their breaks: the MT models
+        split on any whitespace and join with spaces, which ran a whole reply into one block.
+        A step or bullet marker stays as written in front of its translated text."""
+        m = _MARKER.match(line)
+        head, rest = (m.group(0), line[m.end():]) if m else ("", line)
+        if not rest.strip():
+            return line
+        return head + self.translator.translate(rest.strip(), LanguageCode.EN, target).translated_text

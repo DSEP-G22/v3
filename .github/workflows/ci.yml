@@ -20,7 +20,7 @@ jobs:
       - run: cd services/orchestrator && uv run python -m app.fusion
       - run: cd services/triage && uv run python -m pytest tests -q
       - run: cd services/translation && uv run python -m pytest tests -q
-      - run: cd services/audio && uv run python -m app.confidence
+      - run: cd services/audio && uv run python -m app.confidence && uv run python -m app.main
       - run: cd services/image && uv run python -m app.led
       - run: cd services/business && uv run python -m app.fixtures ../grounding/tests/fixtures/prefetch.json
       - run: cd services/grounding && uv run python -m pytest tests -q

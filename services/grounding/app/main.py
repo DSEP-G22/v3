@@ -205,6 +205,7 @@ async def bundle_findings(case_id: str, revision: int) -> dict[str, Any]:
 
     bundle = ContextBundle.model_validate(await get_bundle(case_id, revision))
     return {"headline": findings.headline(bundle), "findings": findings.summarise(bundle),
+            "cause": findings.cause(bundle),
             "recommended_action": select(bundle.permitted_actions, bundle.org_facts, case_id),
             "priority": bundle.priority.model_dump(), "sla_display": bundle.sla.display,
             "customer_priority": bundle.customer_priority.model_dump() if bundle.customer_priority else None,

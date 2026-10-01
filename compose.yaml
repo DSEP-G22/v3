@@ -284,6 +284,10 @@ services:
     environment:
       INQUIRY_URL: http://inquiry:8000
       OMP_NUM_THREADS: "1"
+      # A photo the router classifier does not know is described by a vision model instead.
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      VISION_VLM_MODEL: ${VISION_VLM_MODEL:-gemini-flash-latest}
+      VLM_RPM: ${VLM_RPM:-8}
     cpus: 1
     restart: unless-stopped
 

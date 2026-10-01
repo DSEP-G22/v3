@@ -3,10 +3,14 @@ COPY --from=ghcr.io/astral-sh/uv:0.7 /uv /bin/uv
 WORKDIR /srv
 COPY packages/common packages/common
 RUN --mount=type=cache,target=/root/.cache/uv uv pip install --system ./packages/common "fastapi>=0.115" "uvicorn[standard]>=0.30" \
-    "httpx>=0.27" "numpy>=1.26" "faster-whisper>=1.0"
+    "httpx>=0.27" "numpy>=1.26" "faster-whisper==1.2.1" "av>=11,<19"
+# av 19 dropped an argument faster-whisper 1.2.1 passes when decoding, so every voice note failed.
 # Baked in its own layer so code changes do not re-download ~500 MB of weights.
 ENV MODEL_DIR=/models WHISPER_MODEL=small OMP_NUM_THREADS=4
 RUN python -c "from faster_whisper import WhisperModel; WhisperModel('small', device='cpu', compute_type='int8', download_root='/models/whisper')"
+# Whisper small fine-tuned on 185k Sinhala clips (WER 25), CTranslate2. Its own layer, pinned.
+ENV SINHALA_MODEL=janiduchamika/faster-whisper-small-sinhala-ct2-float16 SINHALA_REVISION=9b9e64f9aee9bd22af26ba93ba7dc93f39b3cc4e
+RUN python -c "import os; from faster_whisper import WhisperModel; WhisperModel(os.environ['SINHALA_MODEL'], revision=os.environ['SINHALA_REVISION'], device='cpu', compute_type='int8', download_root='/models/whisper')"
 ENV HF_HUB_OFFLINE=1
 COPY services/audio/app app
 HEALTHCHECK --interval=10s --timeout=5s --retries=60 CMD python -c "import urllib.request,json;assert json.load(urllib.request.urlopen('http://127.0.0.1:8000/health'))['status']=='ok'"

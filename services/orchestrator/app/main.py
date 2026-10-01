@@ -41,7 +41,9 @@ PREFETCH_TOOLS = [
     "get_planned_work_for", "get_open_work_orders", "get_next_appointment_slots", "get_prior_tickets",
     "get_sla_position",
 ]
-BUDGET_S = {"translate": 10.0, "asr": 30.0, "vision": 6.0, "prefetch": 6.0, "triage": 3.0, "diagnose": 15.0,
+#: asr: a Sinhala note decodes several times more tokens than English; vision: a photo the
+#: classifier does not know waits up to 8 s for a vision model to describe it.
+BUDGET_S = {"translate": 10.0, "asr": 45.0, "vision": 12.0, "prefetch": 6.0, "triage": 3.0, "diagnose": 15.0,
             "grounding": 2.0, "response": 60.0}
 #: What the customer sees for each stage. Never the stage name itself.
 CHIP = {"translate": "reading", "asr": "reading", "vision": "reading", "prefetch": "checking",
@@ -428,7 +430,7 @@ async def cases(tab: str = "open", origin: str = "customer", limit: int = 100, q
     rows = await rt.pool.fetch(
         f"""SELECT * FROM cases."case" WHERE origin = $1 AND {where} AND ($3 = '' OR id ILIKE $3 OR summary ILIKE $3)
             ORDER BY {order} LIMIT $2""",
-        origin, max(1, min(limit, 500)), f"%{q}%" if q else "",
+        origin, max(1, min(limit, 5000)), f"%{q}%" if q else "",
     )
     counts = await rt.pool.fetchrow(
         f"""SELECT count(*) FILTER (WHERE {TABS['needs_approval']}) AS needs_approval,

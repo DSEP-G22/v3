@@ -1,6 +1,6 @@
 "use client";
 
-import { LockIcon, MailIcon, UserIcon, type LucideIcon } from "lucide-react";
+import { EyeIcon, EyeOffIcon, LockIcon, MailIcon, UserIcon, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, type FormEvent } from "react";
@@ -42,6 +42,7 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
   const next = useSearchParams().get("next");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   async function afterAuth() {
     forgetToken();
@@ -107,13 +108,18 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
                 <Input
                   id="password"
                   name="password"
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   autoComplete={mode === "sign-in" ? "current-password" : "new-password"}
                   minLength={8}
                   required
                   aria-invalid={!!error}
-                  className="pl-9"
+                  className="pr-10 pl-9"
                 />
+                <button type="button" onClick={() => setShowPassword((v) => !v)}
+                        aria-label={showPassword ? "Hide password" : "Show password"} aria-pressed={showPassword}
+                        className="absolute top-1/2 right-2 flex size-7 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
+                  {showPassword ? <EyeOffIcon className="size-4" /> : <EyeIcon className="size-4" />}
+                </button>
               </Iconed>
               <FieldError>{error}</FieldError>
             </Field>

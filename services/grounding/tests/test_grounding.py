@@ -167,3 +167,10 @@ class TestFindingsAndPriority:
         """v2's tier table named tiers the seed never uses, so this never fired."""
         p = bundle("SUB-100007", "network_operations", "fault_intermittent_connection")[0].priority
         assert any(r["signal"] == "sla_tier" and r["move"] == 2 for r in p.reasons)
+
+    def test_cause_names_the_side(self):
+        barred = findings.cause(bundle("SUB-100002", "technical_support", "fault_line_sync")[0])
+        assert barred["side"] in ("provider", "both") and barred["provider"]
+        loose = findings.cause(bundle("SUB-100001", "technical_support", "fault_cabling")[0])
+        assert loose["customer"] and loose["side"] in ("customer", "both")
+        assert findings.cause(bundle("SUB-100001", "general", None)[0])["side"] in ("unclear", "provider", "customer", "both")

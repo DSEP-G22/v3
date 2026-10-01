@@ -37,7 +37,9 @@ const TABS = [
 export default function Inbox() {
   const router = useRouter();
   const [tab, setTab] = useState<string>("needs_approval");
-  const { data, loading, reload } = useApi<Queue>(`/console/cases?tab=${tab}`);
+  // The first 100 load fast; "Show all" lifts the cap for this tab.
+  const [limit, setLimit] = useState(100);
+  const { data, loading, reload } = useApi<Queue>(`/console/cases?tab=${tab}&limit=${limit}`);
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [clearing, setClearing] = useState(false);
   const shown = data?.cases ?? [];
@@ -94,7 +96,7 @@ export default function Inbox() {
           </Button>
         </div>
       </div>
-      <Tabs value={tab} onValueChange={(v) => { setTab(String(v)); setPicked(new Set()); }}>
+      <Tabs value={tab} onValueChange={(v) => { setTab(String(v)); setPicked(new Set()); setLimit(100); }}>
         <TabsList>
           {TABS.map((t) => (
             <TabsTrigger key={t.value} value={t.value}>
@@ -186,6 +188,12 @@ export default function Inbox() {
             </TableBody>
           </Table>
         </div>
+        {data.counts[tab as keyof Queue["counts"]] > shown.length && (
+          <div className="flex items-center justify-center gap-3 text-sm text-muted-foreground">
+            Showing {shown.length} of {data.counts[tab as keyof Queue["counts"]]}
+            <Button variant="outline" size="sm" onClick={() => setLimit(5000)}>Show all</Button>
+          </div>
+        )}
         </>
       )}
     </div>

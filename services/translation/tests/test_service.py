@@ -64,3 +64,11 @@ def test_empty_text(service):
     out = service.normalize_text("")
     assert out.detected_language is LanguageCode.UNKNOWN
     assert out.english_text == ""
+
+
+def test_outbound_keeps_lines_steps_and_sign_off(service):
+    reply = "Hello Nimal,\n\nPlease try this:\n1. Restart the router.\n2. Check the cable.\n\nLanka Link customer support"
+    out, translated = service.translate_outbound(reply, LanguageCode.SI)
+    assert translated
+    assert out.split("\n") == ["EN[en]:Hello Nimal,", "", "EN[en]:Please try this:", "1. EN[en]:Restart the router.",
+                               "2. EN[en]:Check the cable.", "", "Lanka Link customer support"]

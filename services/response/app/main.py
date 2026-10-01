@@ -190,6 +190,14 @@ async def _llm_line(line: str, lang: str) -> str:
     return prefix + (normalise(out) or body)
 
 
+def layout(text: str) -> str:
+    """Paragraphs as the model wrote them, one blank line between, and each numbered step on its
+    own line even when the model ran the list into a sentence."""
+    text = re.sub(r"[ \t]+(?=\d{1,2}\.\s)", "\n", text.replace("\r", ""))
+    text = "\n".join(line.strip() for line in text.split("\n"))
+    return re.sub(r"\n{3,}", "\n\n", text).strip()
+
+
 class RunIn(BaseModel):
     case_id: str
     revision: int
@@ -233,7 +241,7 @@ async def _run(body: RunIn) -> dict[str, Any]:
     permitted = {a.action_id for a in bundle.permitted_actions}
     streaming = pre.auto  # only an eligible draft ever streams to the customer
     subject = f"user.{body.user_id}"
-    buffer, parts, sent, stopped = "", [], 0, None
+    buffer, raw, parts, sent, stopped = "", "", [], 0, None
 
     async def emit(sentence: str) -> None:
         nonlocal sent, stopped, streaming
@@ -253,6 +261,7 @@ async def _run(body: RunIn) -> dict[str, Any]:
             async for token in generate_from_bundle(bundle):
                 await rt.nc.publish(f"case.{body.case_id}.stream", token.encode())  # raw, console only
                 buffer += token
+                raw += token
                 *done, buffer = _SENTENCE_END.split(buffer)
                 for sentence in done:
                     parts.append(sentence)
@@ -265,10 +274,9 @@ async def _run(body: RunIn) -> dict[str, Any]:
         parts.append(buffer)
         await emit(buffer)
 
-    # Sentence splitting eats newlines; numbered repair steps go back on their own lines.
+    # From the raw stream, not the split sentences: splitting ate the model's paragraph breaks.
     # plain_text after joining: a model's bold markers can straddle two streamed chunks.
-    text_en = re.sub(r"\s+(?=\d{1,2}\.\s)", "\n",
-                     plain_text(normalise(" ".join(p.strip() for p in parts)))) + f"\n\n{SIGN_OFF}"
+    text_en = layout(plain_text(normalise(raw))) + f"\n\n{SIGN_OFF}"
     findings = policy.check_draft(text_en, bundle) + (stopped or [])
     decision = policy.finalise(pre, rules, findings)
     model = f"{rt.llm.name}:{rt.llm.model}"
