@@ -40,9 +40,9 @@ ROLES: dict[str, tuple[str, str, tuple[str, ...], str, str, dict[str, Any]]] = {
     "llm_triage": ("triage", "Score how urgent the customer's message is (the customer side priority).",
                    ("model", "groq", "ollama", "gemini"), "model", "triage_multitask", {"max_tokens": 600, "temperature": 0}),
     "mt_in": ("translation", "Translate what the customer wrote into English.",
-              ("nllb", "nllb-1.3b", "google", "passthrough"), "nllb", "facebook/nllb-200-distilled-600M", {}),
+              ("nllb", "google", "passthrough"), "nllb", "facebook/nllb-200-distilled-600M", {}),
     "mt_out": ("translation", "Translate the approved reply into the customer's language.",
-               ("nllb", "nllb-1.3b", "google", "passthrough"), "nllb", "facebook/nllb-200-distilled-600M", {}),
+               ("nllb", "google", "passthrough"), "nllb", "facebook/nllb-200-distilled-600M", {}),
     # model_version picks the Sinhala model, swapped live by the audio service (its SINHALA_MODELS);
     # faster-whisper-small-int8 is the base model alone.
     "speech": ("translation", "Transcribe voice notes in the language they were spoken.",

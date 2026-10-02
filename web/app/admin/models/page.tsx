@@ -26,7 +26,7 @@ type Event = { id: string; role: string; from_binding: string; to_binding: strin
 const STAGES: { id: string; label: string; service: string; role?: string; model: string; col: number; row: number; does: string }[] = [
   { id: "intake", label: "Intake", service: "inquiry", model: "Validation rules", col: 0, row: 1.5, does: "Stores the ticket, its photos and voice notes, and opens a case." },
   { id: "speech", label: "Speech", service: "audio", role: "speech", model: "Whisper small + Sinhala run11 int8", col: 1.3, row: 0, does: "Transcribes voice notes in the language they were spoken, then hands the text to translation." },
-  { id: "translate", label: "Translate in", service: "translation", role: "mt_in", model: "NLLB 600M or 1.3B", col: 2.6, row: 0.75, does: "Reads everything the customer said into English: what they typed and what speech transcribed, in Sinhala, Tamil, Singlish or Tanglish." },
+  { id: "translate", label: "Translate in", service: "translation", role: "mt_in", model: "NLLB 600M", col: 2.6, row: 0.75, does: "Reads everything the customer said into English: what they typed and what speech transcribed, in Sinhala, Tamil, Singlish or Tanglish." },
   { id: "vision", label: "Photo", service: "image", model: "Router classifier (ONNX)", col: 1.3, row: 2, does: "Recognises which part of the router a photo shows and which lights are lit." },
   { id: "prefetch", label: "Account", service: "business", model: "Account and network record", col: 1.3, row: 3, does: "Fetches the customer's line, bill and area in parallel." },
   { id: "fusion", label: "Fusion", service: "orchestrator", model: "Rules", col: 4, row: 1.5, does: "Joins every branch into one unified ticket, within each branch's time budget." },
@@ -35,7 +35,7 @@ const STAGES: { id: string; label: string; service: string; role?: string; model
   { id: "diagnose", label: "Diagnose", service: "knowledge", role: "llm_diagnose", model: "MiniLM retrieval + LLM", col: 3, row: 4.4, does: "Retrieves procedures and names the likely fault." },
   { id: "grounding", label: "Grounding", service: "grounding", model: "Rules on the record", col: 2, row: 4.4, does: "Assembles the one bundle the writer may use and scores our side." },
   { id: "draft", label: "Draft", service: "response", role: "llm_draft", model: "LLM", col: 1, row: 4.4, does: "Writes the reply, checks every sentence, releases or holds it." },
-  { id: "translate_out", label: "Translate out", service: "translation", role: "mt_out", model: "NLLB 600M or 1.3B, LLM fallback", col: 0, row: 4.4, does: "Puts the reply into the language the customer wrote in. When translation is not running, the LLM translates." },
+  { id: "translate_out", label: "Translate out", service: "translation", role: "mt_out", model: "NLLB 600M, LLM fallback", col: 0, row: 4.4, does: "Puts the reply into the language the customer wrote in. When translation is not running, the LLM translates." },
 ];
 /** Translation sits on the one multilingual input: typed text, and speech after transcription. */
 const LINKS: [string, string][] = [

@@ -6,7 +6,6 @@ import asyncio
 import contextlib
 import json
 import os
-import threading
 import time
 import urllib.request
 from collections.abc import AsyncIterator
@@ -22,18 +21,14 @@ from app.translate import (
     PassthroughTranslator,
     Translator,
     build,
-    build_large,
     split_sentences,
 )
 from lanka_common.punctuation import normalise
 
 CONTROL_URL = os.environ.get("CONTROL_URL", "http://control:8000")
 #: The mt_in / mt_out bindings pick one of these; the baked model is always the safety net.
-backends: dict[str, Translator | None] = {}
+backends: dict[str, Translator] = {}
 _bound: dict[str, tuple[float, str]] = {}  # role -> (fetched at, impl)
-#: Loaded on first use (see build_large); None once it is known to be missing.
-LAZY = {"nllb-1.3b": build_large}
-_lazy_lock = threading.Lock()
 
 
 def _impl(role: str) -> str:
@@ -46,14 +41,7 @@ def _impl(role: str) -> str:
         except Exception:  # noqa: BLE001 - control unreachable: keep the last known choice
             pass
         _bound[role] = (time.monotonic(), impl)
-    if impl in LAZY and impl not in backends:
-        with _lazy_lock:
-            if impl not in backends:
-                try:
-                    backends[impl] = LAZY[impl]()
-                except Exception:  # noqa: BLE001 - a broken optional model must not take the baked one down
-                    backends[impl] = None
-    return impl if backends.get(impl) is not None else "nllb"
+    return impl if impl in backends else "nllb"
 
 
 def _svc(role: str) -> TranslationService:
