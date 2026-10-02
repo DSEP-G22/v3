@@ -153,6 +153,18 @@ class GoogleTranslator:
         raise RuntimeError("google translate returned nothing")
 
 
+def build_large() -> Translator | None:
+    """NLLB-200 distilled 1.3B (CT2 int8), the mt_in / mt_out "nllb-1.3b" option. ~1.4 GB RAM,
+    so it loads on the first request that picks it, not at boot."""
+    model_dir = Path(os.environ.get("MODEL_DIR", "/models")) / "nllb-1.3b-ct2"
+    if not (model_dir / "model.bin").exists():
+        log.warning("no NLLB 1.3B model at %s: the nllb-1.3b binding falls back to 600M", model_dir)
+        return None
+    t = CT2NLLBTranslator(str(model_dir), device=os.environ.get("LANKA_TR_DEVICE", "cpu"))
+    t.name = "nllb-1.3b-ct2"
+    return t
+
+
 def build() -> Translator:
     backend = os.environ.get("LANKA_TR_BACKEND", "auto")
     model_dir = Path(os.environ.get("MODEL_DIR", "/models")) / "nllb-600m-ct2"

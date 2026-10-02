@@ -14,6 +14,11 @@ RUN ct2-transformers-converter --model ${NLLB_MODEL} --quantization int8 \
 
 FROM ${MODEL_STAGE} AS models
 
+# NLLB-200 distilled 1.3B, already CTranslate2 int8 (OpenNMT, pinned). The mt_in / mt_out
+# bindings can pick it ("nllb-1.3b"); it loads only when picked. Benchmark: docs/TRANSLATION-MODELS.md.
+FROM python:3.12-slim AS nllb-large
+RUN pip install --no-cache-dir "huggingface_hub>=0.25"  && python -c "from huggingface_hub import snapshot_download as s; s('OpenNMT/nllb-200-distilled-1.3B-ct2-int8', revision='70f572adafa4794890ce7826156a4209717855af', local_dir='/models/nllb-1.3b-ct2', allow_patterns=['*.json', 'model.bin'])"  && rm -rf /models/nllb-1.3b-ct2/.cache
+
 # Stage 2: runtime. No torch. MODEL_DIR can point at a volume to override the baked weights.
 FROM python:3.12-slim
 COPY --from=ghcr.io/astral-sh/uv:0.7 /uv /bin/uv
@@ -22,6 +27,7 @@ COPY packages/common packages/common
 RUN --mount=type=cache,target=/root/.cache/uv uv pip install --system ./packages/common "fastapi>=0.115" "uvicorn[standard]>=0.30" \
     "ctranslate2>=4.4" "transformers>=4.44" "sentencepiece>=0.2" "deep-translator>=1.11"
 COPY --from=models /models /models
+COPY --from=nllb-large /models/nllb-1.3b-ct2 /models/nllb-1.3b-ct2
 ENV MODEL_DIR=/models OMP_NUM_THREADS=4 HF_HUB_OFFLINE=1
 COPY services/translation/app app
 HEALTHCHECK --interval=10s --timeout=5s --retries=60 CMD python -c "import urllib.request,json;assert json.load(urllib.request.urlopen('http://127.0.0.1:8000/health'))['status']=='ok'"
