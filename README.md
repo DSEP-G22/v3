@@ -40,8 +40,8 @@ Profiles:
 - **Triage model.** The customer side priority comes from Groq (`qwen/qwen3.8-27b` by default; gpt-oss
   20b/120b and compound are selectable) or the distilled TriageModel, which also answers whenever Groq
   is slow or rate limited.
-- **LLM.** Bindings are set live in `/admin/models`. The default is Ollama `gpt-oss:120b-cloud` via the
-  host daemon (`OLLAMA_BASE_URL`), with the offline stub for CI.
+- **LLM.** Bindings are set live in `/admin/models`. Groq serves them: drafting on `openai/gpt-oss-120b`
+  (falling back to `openai/gpt-oss-20b`), diagnosis on `openai/gpt-oss-20b`, with the offline stub for CI.
 - **Tracing.** `LANGSMITH_TRACING=true` plus `LANGSMITH_API_KEY`: one trace per case revision, every stage
   nested, and the draft as an LLM run with its exact prompt.
 

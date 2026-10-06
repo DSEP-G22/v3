@@ -42,9 +42,6 @@ MODEL_DIR = os.environ.get("MODEL_DIR", "/models")
 SINHALA_MODELS: dict[str, tuple[str, str | None]] = {
     # Yohan2003/whisper-small-sinhala-run11-v6-e6, converted at build (convert.py). Test CER 4.4%.
     "whisper-small-si-run11-int8": (os.path.join(MODEL_DIR, "whisper", "si-run11-int8"), None),
-    # janiduchamika/whisper-small-sinhala-general-185k, its own CT2 build. Test WER 25%.
-    "whisper-small-si-185k-int8": ("janiduchamika/faster-whisper-small-sinhala-ct2-float16",
-                                   "9b9e64f9aee9bd22af26ba93ba7dc93f39b3cc4e"),
 }
 TAMIL_MODELS: dict[str, tuple[str, str | None]] = {
     # vasista22/whisper-tamil-small (IIT Madras), converted at build (convert.py). Research and
@@ -79,7 +76,9 @@ def _load(name: str, lang: str = "si") -> Any:
 async def use(name: str, lang: str = "si") -> None:
     """Swap one language's fine-tune. The new one loads and warms first; a note already being
     transcribed keeps the model it started with, and the old one is freed when it finishes."""
-    if name == fine[lang][1] or (name != BASE_ONLY and name not in FINE_TUNES[lang][1]):
+    if name != BASE_ONLY and name not in FINE_TUNES[lang][1]:
+        name = DEFAULT_SPEECH if lang == "si" else DEFAULT_SPEECH_TA  # a retired or unknown id
+    if name == fine[lang][1]:
         return
     try:
         loaded = None if name == BASE_ONLY else await asyncio.to_thread(_load, name, lang)

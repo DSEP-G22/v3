@@ -31,16 +31,16 @@ CONFIG_DIR = Path(os.environ.get("LANKA_CONFIG_DIR") or Path(__file__).resolve()
 #: role -> (stage, summary, allowed impls, default impl, default model, default params)
 ROLES: dict[str, tuple[str, str, tuple[str, ...], str, str, dict[str, Any]]] = {
     "llm_draft": ("response", "Write the reply from the assembled context bundle.",
-                  ("ollama", "gemini", "groq", "stub"), "ollama", "gpt-oss:120b-cloud",
-                  {"fallback": {"impl": "gemini", "model_version": "gemini-3.6-flash"}}),
+                  ("groq", "gemini", "stub"), "groq", "openai/gpt-oss-120b",
+                  {"fallback": {"impl": "groq", "model_version": "openai/gpt-oss-20b"}}),
     "llm_diagnose": ("reasoning", "Diagnose the fault from the message and retrieved procedures.",
-                     ("ollama", "gemini", "groq", "rules", "stub"), "ollama", "gpt-oss:20b-cloud", {"think": "low"}),
+                     ("groq", "gemini", "rules", "stub"), "groq", "openai/gpt-oss-20b", {}),
     # "model" is the distilled TriageModel inside the triage service: the default, because it is
     # free, offline and 20 ms. An LLM reading is selectable and falls back to the model.
     # model_version "xlnet-priority-int8" keeps the TriageModel but takes the band from XLNet
     # (triage app/xlnet.py): gold macro-F1 0.789 vs 0.724, ~80 ms.
     "llm_triage": ("triage", "Score how urgent the customer's message is (the customer side priority).",
-                   ("model", "groq", "ollama", "gemini"), "model", "triage_multitask", {"max_tokens": 600, "temperature": 0}),
+                   ("model", "groq", "gemini"), "model", "triage_multitask", {"max_tokens": 600, "temperature": 0}),
     "mt_in": ("translation", "Translate what the customer wrote into English.",
               ("nllb", "google", "passthrough"), "nllb", "facebook/nllb-200-distilled-600M", {}),
     "mt_out": ("translation", "Translate the approved reply into the customer's language.",
@@ -105,6 +105,15 @@ async def _seed() -> None:
                 impl = os.environ["LANKA_LLM_IMPL"]  # CI and load tests seed the offline stub
             await conn.execute("""INSERT INTO control.model_binding (role, impl, model_version, params)
                                   VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING""", role, impl, model, json.dumps(params))
+        # Ollama is retired: Groq serves every LLM role. Move any binding still on Ollama (and a
+        # draft fallback pointing at Gemini, which refuses the VPS's region) to the role's default.
+        for role in ("llm_draft", "llm_diagnose", "llm_triage"):
+            _, _, _, impl, model, params = ROLES[role]
+            await conn.execute("""UPDATE control.model_binding SET impl = $2, model_version = $3, params = $4,
+                                      generation = generation + 1, updated_by = 'seed-groq', updated_at = now()
+                                  WHERE role = $1 AND (impl = 'ollama' OR params::text LIKE '%"ollama"%'
+                                                       OR (role = 'llm_draft' AND params::text LIKE '%gemini%'))""",
+                               role, impl, model, json.dumps(params))
         # The first seed bound speech to the base model alone; move it to the Sinhala default
         # once, unless an admin has chosen since.
         await conn.execute("""UPDATE control.model_binding SET model_version = $1, generation = generation + 1
@@ -196,9 +205,9 @@ async def rebind(role: str, b: Rebind) -> dict[str, Any]:
             kept = json.loads(before["params"]) if isinstance(before["params"], str) else dict(before["params"] or {})
             defaults = dict(ROLES[role][5])
             b.params = {**defaults, **kept}
-            if b.impl != "ollama":
-                b.params.pop("think", None)
-            if (b.params.get("fallback") or {}).get("impl") == b.impl:
+            b.params.pop("think", None)  # an Ollama-only option
+            fb = b.params.get("fallback") or {}
+            if (fb.get("impl"), fb.get("model_version")) == (b.impl, b.model_version):
                 b.params.pop("fallback", None)  # a fallback to itself is no fallback
         row = await conn.fetchrow(
             """UPDATE control.model_binding SET impl = $2, model_version = $3, params = $4, generation = generation + 1,

@@ -74,9 +74,8 @@ function curve(a: ReturnType<typeof box>, b: ReturnType<typeof box>) {
 
 /** Model ids each implementation accepts; the first is filled in when you switch to it. */
 const MODELS: Record<string, string[]> = {
-  ollama: ["gpt-oss:120b-cloud", "gpt-oss:20b-cloud"],
   gemini: ["gemini-3.6-flash", "gemini-2.5-flash", "gemini-2.5-pro"],
-  groq: ["qwen/qwen3.8-27b", "openai/gpt-oss-20b", "openai/gpt-oss-120b", "groq/compound-mini", "groq/compound"],
+  groq: ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.8-27b", "groq/compound-mini", "groq/compound"],
   // The distilled TriageModel; XLNet int8 takes the urgency band from a fine-tuned XLNet instead.
   model: ["triage_multitask", "xlnet-priority-int8"],
   stub: ["stub-generator-1"],
@@ -85,7 +84,7 @@ const MODELS: Record<string, string[]> = {
   google: ["google-translate"],
   passthrough: ["none"],
   // Sinhala (speech) and Tamil (speech_ta) models the audio service swaps in live; the last is the base model alone.
-  whisper: ["whisper-small-si-run11-int8", "whisper-small-si-185k-int8", "whisper-small-ta-vasista22-int8", "faster-whisper-small-int8"],
+  whisper: ["whisper-small-si-run11-int8", "whisper-small-ta-vasista22-int8", "faster-whisper-small-int8"],
 };
 
 /** The details window's halo: the glow box's light, outside the window. */

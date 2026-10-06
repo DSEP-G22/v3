@@ -17,8 +17,8 @@ RUN --mount=type=cache,target=/root/.cache/uv uv pip install --system ./packages
 ENV MODEL_DIR=/models WHISPER_MODEL=small OMP_NUM_THREADS=4
 RUN python -c "from faster_whisper import WhisperModel; WhisperModel('small', device='cpu', compute_type='int8', download_root='/models/whisper')"
 # The Sinhala models the speech binding can swap between (app/main.py SINHALA_MODELS).
-# janiduchamika 185k (WER 25), its own CTranslate2 build, pinned:
-RUN python -c "from faster_whisper import WhisperModel; WhisperModel('janiduchamika/faster-whisper-small-sinhala-ct2-float16', revision='9b9e64f9aee9bd22af26ba93ba7dc93f39b3cc4e', device='cpu', compute_type='int8', download_root='/models/whisper')"
+# janiduchamika 185k (float16, ~480 MB, twice run11's error rate) is no longer baked: the VPS
+# disk only holds models that earn their place.
 # Yohan2003 run11 (test CER 4.4%), the default, converted in stage 1:
 COPY --from=si-convert /out/si-run11-int8 /models/whisper/si-run11-int8
 # vasista22 Tamil, converted in stage 1; the speech_ta binding swaps it:
