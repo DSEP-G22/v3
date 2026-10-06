@@ -17,6 +17,7 @@ done
 (cd services/knowledge && uv run python -m app.diagnose)
 (cd services/response && uv run python -m app.policy)
 uv run pytest tests/architecture -q
-(cd services/auth && npm test)
+# A fresh checkout (the test-plan workflow) has no node_modules for auth: install them first.
+(cd services/auth && { [ -d node_modules ] || npm install --no-audit --no-fund; } && npm test)
 (cd web && npx tsc --noEmit && ! grep -rEn 'faker|mockData|placeholderData' app components lib)
 echo "test-all OK"

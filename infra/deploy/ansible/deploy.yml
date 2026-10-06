@@ -67,8 +67,27 @@
 
     # Room first: a week of sha-tagged releases filled the disk mid-pull (1 Oct 2026). Only images
     # no container uses go; the running stack keeps its own, and any release can be pulled again.
+    # The model images (Whisper, NLLB, MiniLM, XLNet) are GBs each; with the running copies still
+    # on disk the new ones did not fit (6 Oct 2026, "no space left on device"). When space is
+    # short, take those services down first so their old images can be pruned. They are back
+    # within minutes, and the pipeline degrades around them meanwhile.
+    - name: Space Docker has left, in GB
+      shell: df --output=avail -BG /var/lib/docker | tail -1 | tr -dc 0-9
+      register: free_gb
+      changed_when: false
+
+    - name: Short of room, stop the model services so their images can go
+      command: "{{ compose }} rm -sf audio translation triage knowledge image"
+      args: { chdir: "{{ root }}" }
+      when: free_gb.stdout | int < 15
+      changed_when: true
+
     - name: Free the disk of images no container uses
       command: docker image prune -af
+      changed_when: false
+
+    - name: And of build cache
+      command: docker builder prune -af
       changed_when: false
 
     - name: Pull the new images

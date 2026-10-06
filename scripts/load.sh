@@ -29,6 +29,7 @@ if command -v k6 >/dev/null; then
   k6 run "${ARGS[@]}" ${SUMMARY:+--summary-export "$SUMMARY"} "$SCRIPT"
 else
   # MSYS_NO_PATHCONV: Git Bash on Windows rewrites /work into a C:\ path before Docker sees it.
-  MSYS_NO_PATHCONV=1 docker run --rm -i --network host -v "$PWD:/work" -w /work grafana/k6 run \
+  # --user: k6's own user cannot write the summary into a checkout the runner's user owns.
+  MSYS_NO_PATHCONV=1 docker run --rm -i --network host --user "$(id -u):$(id -g)" -v "$PWD:/work" -w /work grafana/k6 run \
     "${ARGS[@]}" ${SUMMARY:+--summary-export "/work/$SUMMARY"} "/work/$SCRIPT"
 fi
