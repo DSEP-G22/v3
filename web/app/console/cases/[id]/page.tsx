@@ -137,7 +137,7 @@ export default function CasePage() {
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[1fr_1.1fr]">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-4 [overflow-wrap:anywhere] lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
         <Card>
           <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
             <CardTitle>Conversation</CardTitle>

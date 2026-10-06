@@ -27,9 +27,21 @@ def test_a_429_is_retried_after_the_wait_it_asks_for(monkeypatch):
     assert asyncio.run(m.generate("hi")) == "Hello"
     assert (len(calls), waits) == (2, [3.0])
     body = calls[0].read().decode()
-    assert '"max_tokens": 2048' in body.replace(":2048", ": 2048") and "reasoning_effort" in body
+    assert '"max_tokens":1024' in body.replace(" ", "") and "reasoning_effort" in body
 
 
 def test_retry_after_is_capped_and_defaults():
     assert llm.retry_after("999") == llm.MAX_RETRY_WAIT_S
     assert llm.retry_after(None) == llm.retry_after("soon") == 5.0
+
+
+def test_a_refusal_keeps_the_providers_reason():
+    m = llm.build("groq", "openai/gpt-oss-20b", {}, {"GROQ_API_KEY": "k"})
+    m._http = httpx.AsyncClient(transport=httpx.MockTransport(
+        lambda r: httpx.Response(400, json={"error": {"message": "model decommissioned"}})))
+    try:
+        asyncio.run(m.generate("hi"))
+    except llm.LLMUnavailable as exc:
+        assert "model decommissioned" in str(exc)
+    else:
+        raise AssertionError("a 400 must raise")

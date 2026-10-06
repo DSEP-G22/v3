@@ -146,7 +146,7 @@ class Ollama:
 
 
 RATE_LIMIT_RETRIES = 1  # drafting has 60 s for the model and its fallback together
-GROQ_MAX_TOKENS = 2048
+GROQ_MAX_TOKENS = 1024  # a reply is ~300 tokens; low reasoning adds a few hundred
 MAX_RETRY_WAIT_S = 15.0
 
 
@@ -192,7 +192,9 @@ class OpenAICompatible:
                     if r.status_code == 429 and attempt < RATE_LIMIT_RETRIES:
                         await asyncio.sleep(retry_after(r.headers.get("retry-after")))
                         continue
-                    r.raise_for_status()
+                    if r.is_error:  # keep the provider's reason (which limit a 429 hit) in the message
+                        await r.aread()
+                        raise httpx.HTTPStatusError(f"HTTP {r.status_code}: {r.text[:300]}", request=r.request, response=r)
                     async for line in r.aiter_lines():
                         if not line.startswith("data:") or line.strip() == "data: [DONE]":
                             continue
