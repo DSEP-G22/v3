@@ -40,8 +40,11 @@ CONTROL_URL = os.environ.get("CONTROL_URL", "http://control:8000")
 MODEL_DIR = os.environ.get("MODEL_DIR", "/models")
 #: Binding model id -> (path or Hub repo, revision). All baked into the image, int8 CTranslate2.
 SINHALA_MODELS: dict[str, tuple[str, str | None]] = {
-    # Yohan2003/whisper-small-sinhala-run11-v6-e6, converted at build (convert.py). Test CER 4.4%.
+    # SinhaSpeech/whisper-small-sinhala-v6-e6-run11-best (formerly Yohan2003/...-run11-v6-e6), converted
+    # at build (convert.py). Card: test CER 4.4%; on YouTube Sinhala CER 12.7% (docs/SINHALA-ASR.md).
     "whisper-small-si-run11-int8": (os.path.join(MODEL_DIR, "whisper", "si-run11-int8"), None),
+    # dehanns LoRA r32 seed 456 merged into whisper-small: the alternative. YouTube Sinhala CER 48%.
+    "whisper-small-si-dehanns-lora-int8": (os.path.join(MODEL_DIR, "whisper", "si-dehanns-lora-int8"), None),
 }
 TAMIL_MODELS: dict[str, tuple[str, str | None]] = {
     # vasista22/whisper-tamil-small (IIT Madras), converted at build (convert.py). Research and

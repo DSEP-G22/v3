@@ -84,7 +84,7 @@ const MODELS: Record<string, string[]> = {
   google: ["google-translate"],
   passthrough: ["none"],
   // Sinhala (speech) and Tamil (speech_ta) models the audio service swaps in live; the last is the base model alone.
-  whisper: ["whisper-small-si-run11-int8", "whisper-small-ta-vasista22-int8", "faster-whisper-small-int8"],
+  whisper: ["whisper-small-si-run11-int8", "whisper-small-si-dehanns-lora-int8", "whisper-small-ta-vasista22-int8", "faster-whisper-small-int8"],
 };
 
 /** The details window's halo: the glow box's light, outside the window. */

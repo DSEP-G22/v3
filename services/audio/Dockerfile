@@ -1,8 +1,13 @@
-# Stage 1: Yohan2003/whisper-small-sinhala-run11-v6-e6 (pinned) to CTranslate2 int8. Torch lives only here.
+# Stage 1: the fine-tunes to CTranslate2 int8 (convert.py). Torch lives only here. Research and
+# benchmarks behind each: docs/SINHALA-ASR.md and docs/TAMIL-ASR.md.
 FROM python:3.12-slim AS si-convert
-RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch  && pip install --no-cache-dir "transformers>=4.45,<5" "ctranslate2>=4.5,<5" "huggingface_hub>=0.25"
+RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch  && pip install --no-cache-dir "transformers>=4.45,<5" "ctranslate2>=4.5,<5" "huggingface_hub>=0.25" "peft>=0.11"
 COPY services/audio/convert.py /convert.py
-RUN python /convert.py Yohan2003/whisper-small-sinhala-run11-v6-e6 b51781e05fce8c67c6dc4c6f5e2a1963ec328344 /out/si-run11-int8
+# SinhaSpeech run11 (formerly Yohan2003/whisper-small-sinhala-run11-v6-e6; same weights). Pinned at
+# b51781e: later revisions only edit the card but ship a transformers 5 tokenizer config.
+RUN python /convert.py SinhaSpeech/whisper-small-sinhala-v6-e6-run11-best b51781e05fce8c67c6dc4c6f5e2a1963ec328344 /out/si-run11-int8
+# dehanns LoRA r32 seed 456, merged into whisper-small: the alternative on the speech binding.
+RUN python /convert.py dehanns/whisper-small-sinhala-lora-r32-seed-456 3d1a45410e15a4bdf99ab95da82282240187b7e8 /out/si-dehanns-lora-int8
 # vasista22/whisper-tamil-small (pinned), the Tamil default (docs/TAMIL-ASR.md):
 RUN python /convert.py vasista22/whisper-tamil-small ac0d71cd70d4c66aec7126996cd9e56e97e698b7 /out/ta-vasista22-int8
 
@@ -21,6 +26,7 @@ RUN python -c "from faster_whisper import WhisperModel; WhisperModel('small', de
 # disk only holds models that earn their place.
 # Yohan2003 run11 (test CER 4.4%), the default, converted in stage 1:
 COPY --from=si-convert /out/si-run11-int8 /models/whisper/si-run11-int8
+COPY --from=si-convert /out/si-dehanns-lora-int8 /models/whisper/si-dehanns-lora-int8
 # vasista22 Tamil, converted in stage 1; the speech_ta binding swaps it:
 COPY --from=si-convert /out/ta-vasista22-int8 /models/whisper/ta-vasista22-int8
 ENV HF_HUB_OFFLINE=1
