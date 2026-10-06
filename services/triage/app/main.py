@@ -24,6 +24,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel, Field
 
 from app import model as triage_model
+from app import xlnet
 from app.rules import DEPARTMENTS, triage
 from lanka_common.contracts import band_for
 from lanka_common.llm import LLMUnavailable, build
@@ -41,7 +42,8 @@ SYSTEM = (
 
 app = FastAPI(title="Lanka Link triage", docs_url=None, redoc_url=None)
 _lock = threading.Lock()
-state: dict[str, Any] = {"model": triage_model.load(), "binding": None, "llm": None, "bound_at": 0.0}
+#: head is the in-service model the binding picked: the TriageModel, or XLNet for the band (app/xlnet.py).
+state: dict[str, Any] = {"model": triage_model.load(), "binding": None, "llm": None, "bound_at": 0.0, "head": None}
 http = httpx.AsyncClient(timeout=2.0)
 
 
@@ -63,6 +65,7 @@ async def _llm() -> Any:
                 state["llm"] = None if b["impl"] == "model" else build(b["impl"], b["model_version"], b.get("params"),
                                                                         dict(os.environ))
                 state["binding"] = {"key": (b["impl"], b["model_version"])}
+                state["head"] = b["model_version"] if b["impl"] == "model" else None
         except (httpx.HTTPError, LLMUnavailable, KeyError, ValueError):
             pass  # control unreachable: keep the last known choice
     return state["llm"]
@@ -106,10 +109,17 @@ def _rules_priority(level: int) -> dict[str, Any]:
 def _model_priority(body: TriageIn, level: int) -> dict[str, Any]:
     m = state["model"]
     try:
-        return m.predict(body.fused_text, segment=body.segment, sla_age_score=body.sla_age_score,
-                         repeat_contact=body.repeat_contact) if m else _rules_priority(level)
+        reading = m.predict(body.fused_text, segment=body.segment, sla_age_score=body.sla_age_score,
+                            repeat_contact=body.repeat_contact) if m else _rules_priority(level)
     except Exception:  # noqa: BLE001 - a model fault degrades to the rules level, never fails the stage
-        return _rules_priority(level)
+        reading = _rules_priority(level)
+    if state["head"] == xlnet.VERSION:
+        try:
+            return xlnet.apply(reading, body.fused_text)
+        except Exception as exc:  # noqa: BLE001 - weights missing or broken: the TriageModel band stands
+            reading["reasons"] = [*reading.get("reasons", []), {"signal": "fallback", "move": 0, "detail":
+                                  f"XLNet did not load ({type(exc).__name__}), so the TriageModel band stands."}]
+    return reading
 
 
 @app.post("/run")
