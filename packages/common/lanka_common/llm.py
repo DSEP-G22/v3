@@ -145,6 +145,19 @@ class Ollama:
         return "degraded", f"{self.model} is not among {len(names)} local models"
 
 
+RATE_LIMIT_RETRIES = 1  # drafting has 60 s for the model and its fallback together
+GROQ_MAX_TOKENS = 2048
+MAX_RETRY_WAIT_S = 15.0
+
+
+def retry_after(header: str | None) -> float:
+    """Seconds a 429 asks us to wait ("7", "1.5"), 5 when it does not say, never past the cap."""
+    try:
+        return min(max(float(header), 0.5), MAX_RETRY_WAIT_S) if header else 5.0
+    except ValueError:
+        return 5.0
+
+
 class OpenAICompatible:
     """Chat completions (Gemini's OpenAI endpoint, Groq, or any compatible provider)."""
 
@@ -171,16 +184,22 @@ class OpenAICompatible:
         self._breaker.check()
         messages = ([{"role": "system", "content": system}] if system else []) + [{"role": "user", "content": prompt}]
         try:
-            async with self._http.stream("POST", f"{self.base_url}/chat/completions", headers=self._headers(),
-                                         json={"model": self.model, "messages": messages, "stream": True,
-                                               **{"temperature": 0.2, **self._extra}}) as r:
-                r.raise_for_status()
-                async for line in r.aiter_lines():
-                    if not line.startswith("data:") or line.strip() == "data: [DONE]":
+            for attempt in range(RATE_LIMIT_RETRIES + 1):
+                async with self._http.stream("POST", f"{self.base_url}/chat/completions", headers=self._headers(),
+                                             json={"model": self.model, "messages": messages, "stream": True,
+                                                   **{"temperature": 0.2, **self._extra}}) as r:
+                    # Groq's per-minute token limit: wait as long as it asks (capped), nothing sent yet.
+                    if r.status_code == 429 and attempt < RATE_LIMIT_RETRIES:
+                        await asyncio.sleep(retry_after(r.headers.get("retry-after")))
                         continue
-                    delta = json.loads(line[5:])["choices"][0].get("delta", {}).get("content")
-                    if delta:
-                        yield normalise(delta)
+                    r.raise_for_status()
+                    async for line in r.aiter_lines():
+                        if not line.startswith("data:") or line.strip() == "data: [DONE]":
+                            continue
+                        delta = json.loads(line[5:])["choices"][0].get("delta", {}).get("content")
+                        if delta:
+                            yield normalise(delta)
+                break
             self._breaker.ok()
         except (httpx.HTTPError, KeyError, json.JSONDecodeError) as exc:
             self._breaker.fail()
@@ -298,7 +317,11 @@ def build(impl: str, model: str, params: dict[str, Any] | None, env: dict[str, s
     if impl == "groq":
         return OpenAICompatible(env.get("GROQ_BASE_URL", "https://api.groq.com/openai/v1"), model,
                                 env.get("GROQ_API_KEY"), timeout_s=float(params.get("timeout_s", 60)), name="groq",
-                                max_tokens=params.get("max_tokens"), temperature=params.get("temperature"))
+                                # An unset budget reserves the model's whole window against the
+                                # per-minute token limit, and the next call gets a 429.
+                                max_tokens=params.get("max_tokens", GROQ_MAX_TOKENS), temperature=params.get("temperature"),
+                                reasoning_effort=params.get("reasoning_effort",
+                                                            "low" if model.startswith("openai/gpt-oss") else None))
     if impl == "stub":
         return Stub()
     raise LLMUnavailable(f"no generator for implementation {impl!r}")

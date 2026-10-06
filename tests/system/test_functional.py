@@ -51,6 +51,7 @@ def test_a_sinhala_message_becomes_a_case_with_a_draft(ravi, agent):
     assert detail, "no draft was written for the case"
     draft = detail["drafts"][-1]
     assert draft["text_en"].strip(), "the draft is empty"
+    assert draft["text_out"], f"the draft was held untranslated ({draft.get('status')}): {draft['text_en'][:300]}"
     assert SINHALA.search(draft["text_out"]), "the reply must be in the language the customer wrote in"
     # Every number in the English draft has to survive translation: a wrong amount or wait is a lie.
     assert numbers(draft["text_en"]) == numbers(draft["text_out"]), draft["text_out"]
