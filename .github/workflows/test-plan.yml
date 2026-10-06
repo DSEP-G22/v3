@@ -34,7 +34,12 @@ jobs:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: |
           cp .env.example .env
-          impl=stub; [ -n "$OLLAMA_API_KEY" ] && impl=ollama
+          # Only a key Ollama accepts: a rejected one (401) left every draft unwritten (6 Oct 2026).
+          impl=stub
+          if [ -n "$OLLAMA_API_KEY" ]; then
+            code=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $OLLAMA_API_KEY" https://ollama.com/api/chat -d '{}')
+            case "$code" in 401|403) echo "::warning::OLLAMA_API_KEY is rejected ($code): drafting uses the offline stub";; *) impl=ollama;; esac
+          fi
           sed -i "s|^BETTER_AUTH_SECRET=.*|BETTER_AUTH_SECRET=$(openssl rand -base64 32)|;
                   s|^OLLAMA_BASE_URL=.*|OLLAMA_BASE_URL=https://ollama.com|;
                   s|^LANKA_LLM_IMPL=.*|LANKA_LLM_IMPL=$impl|;
