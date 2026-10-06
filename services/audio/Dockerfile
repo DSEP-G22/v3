@@ -3,6 +3,8 @@ FROM python:3.12-slim AS si-convert
 RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch  && pip install --no-cache-dir "transformers>=4.45,<5" "ctranslate2>=4.5,<5" "huggingface_hub>=0.25"
 COPY services/audio/convert.py /convert.py
 RUN python /convert.py Yohan2003/whisper-small-sinhala-run11-v6-e6 b51781e05fce8c67c6dc4c6f5e2a1963ec328344 /out/si-run11-int8
+# vasista22/whisper-tamil-small (pinned), the Tamil default (docs/TAMIL-ASR.md):
+RUN python /convert.py vasista22/whisper-tamil-small ac0d71cd70d4c66aec7126996cd9e56e97e698b7 /out/ta-vasista22-int8
 
 FROM python:3.12-slim
 COPY --from=ghcr.io/astral-sh/uv:0.7 /uv /bin/uv
@@ -19,6 +21,8 @@ RUN python -c "from faster_whisper import WhisperModel; WhisperModel('small', de
 RUN python -c "from faster_whisper import WhisperModel; WhisperModel('janiduchamika/faster-whisper-small-sinhala-ct2-float16', revision='9b9e64f9aee9bd22af26ba93ba7dc93f39b3cc4e', device='cpu', compute_type='int8', download_root='/models/whisper')"
 # Yohan2003 run11 (test CER 4.4%), the default, converted in stage 1:
 COPY --from=si-convert /out/si-run11-int8 /models/whisper/si-run11-int8
+# vasista22 Tamil, converted in stage 1; the speech_ta binding swaps it:
+COPY --from=si-convert /out/ta-vasista22-int8 /models/whisper/ta-vasista22-int8
 ENV HF_HUB_OFFLINE=1
 COPY services/audio/app app
 HEALTHCHECK --interval=10s --timeout=5s --retries=60 CMD python -c "import urllib.request,json;assert json.load(urllib.request.urlopen('http://127.0.0.1:8000/health'))['status']=='ok'"

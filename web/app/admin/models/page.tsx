@@ -26,6 +26,7 @@ type Event = { id: string; role: string; from_binding: string; to_binding: strin
 const STAGES: { id: string; label: string; service: string; role?: string; model: string; col: number; row: number; does: string }[] = [
   { id: "intake", label: "Intake", service: "inquiry", model: "Validation rules", col: 0, row: 1.5, does: "Stores the ticket, its photos and voice notes, and opens a case." },
   { id: "speech", label: "Speech", service: "audio", role: "speech", model: "Whisper small + Sinhala run11 int8", col: 1.3, row: 0, does: "Transcribes voice notes in the language they were spoken, then hands the text to translation." },
+  { id: "speech_ta", label: "Tamil speech", service: "audio", role: "speech_ta", model: "Whisper small Tamil (vasista22) int8", col: 1.3, row: 1, does: "Transcribes the voice notes speech heard as Tamil, with a Tamil fine-tune of Whisper small." },
   { id: "translate", label: "Translate in", service: "translation", role: "mt_in", model: "NLLB 600M", col: 2.6, row: 0.75, does: "Reads everything the customer said into English: what they typed and what speech transcribed, in Sinhala, Tamil, Singlish or Tanglish." },
   { id: "vision", label: "Photo", service: "image", model: "Router classifier (ONNX)", col: 1.3, row: 2, does: "Recognises which part of the router a photo shows and which lights are lit." },
   { id: "prefetch", label: "Account", service: "business", model: "Account and network record", col: 1.3, row: 3, does: "Fetches the customer's line, bill and area in parallel." },
@@ -39,7 +40,7 @@ const STAGES: { id: string; label: string; service: string; role?: string; model
 ];
 /** Translation sits on the one multilingual input: typed text, and speech after transcription. */
 const LINKS: [string, string][] = [
-  ["in", "intake"], ["intake", "speech"], ["intake", "translate"], ["speech", "translate"], ["intake", "vision"],
+  ["in", "intake"], ["intake", "speech"], ["intake", "translate"], ["speech", "translate"], ["intake", "speech_ta"], ["speech_ta", "translate"], ["intake", "vision"],
   ["intake", "prefetch"], ["translate", "fusion"], ["vision", "fusion"], ["prefetch", "fusion"], ["fusion", "triage"],
   ["triage", "diagnose"], ["diagnose", "grounding"], ["grounding", "draft"], ["draft", "translate_out"], ["translate_out", "out"],
 ];
@@ -76,14 +77,15 @@ const MODELS: Record<string, string[]> = {
   ollama: ["gpt-oss:120b-cloud", "gpt-oss:20b-cloud"],
   gemini: ["gemini-3.6-flash", "gemini-2.5-flash", "gemini-2.5-pro"],
   groq: ["qwen/qwen3.8-27b", "openai/gpt-oss-20b", "openai/gpt-oss-120b", "groq/compound-mini", "groq/compound"],
-  model: ["triage_multitask"],
+  // The distilled TriageModel; XLNet int8 takes the urgency band from a fine-tuned XLNet instead.
+  model: ["triage_multitask", "xlnet-priority-int8"],
   stub: ["stub-generator-1"],
   rules: ["rules"],
   nllb: ["facebook/nllb-200-distilled-600M"],
   google: ["google-translate"],
   passthrough: ["none"],
-  // Sinhala model the audio service swaps in live; the last is the base model alone.
-  whisper: ["whisper-small-si-run11-int8", "whisper-small-si-185k-int8", "faster-whisper-small-int8"],
+  // Sinhala (speech) and Tamil (speech_ta) models the audio service swaps in live; the last is the base model alone.
+  whisper: ["whisper-small-si-run11-int8", "whisper-small-si-185k-int8", "whisper-small-ta-vasista22-int8", "faster-whisper-small-int8"],
 };
 
 /** The details window's halo: the glow box's light, outside the window. */

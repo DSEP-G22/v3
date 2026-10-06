@@ -9,11 +9,13 @@ quarter of the float32 checkpoint and decode at the same speed as the base model
 import sys
 
 from ctranslate2.converters import TransformersConverter
-from huggingface_hub import snapshot_download
+from huggingface_hub import list_repo_files, snapshot_download
 from transformers import WhisperTokenizerFast
 
 repo, rev, out = sys.argv[1:4]
-src = snapshot_download(repo, revision=rev, allow_patterns=["*.json", "*.txt", "model.safetensors"],
+# Older fine-tunes (vasista22) ship only pytorch_model.bin; never fetch both copies.
+weights = "model.safetensors" if "model.safetensors" in list_repo_files(repo, revision=rev) else "pytorch_model.bin"
+src = snapshot_download(repo, revision=rev, allow_patterns=["*.json", "*.txt", weights],
                         ignore_patterns=["checkpoint-*/*"])
 WhisperTokenizerFast.from_pretrained(src).save_pretrained(src)  # faster-whisper reads tokenizer.json
 TransformersConverter(src, copy_files=["tokenizer.json", "preprocessor_config.json"]).convert(out, quantization="int8", force=True)

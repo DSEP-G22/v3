@@ -37,6 +37,8 @@ ROLES: dict[str, tuple[str, str, tuple[str, ...], str, str, dict[str, Any]]] = {
                      ("ollama", "gemini", "groq", "rules", "stub"), "ollama", "gpt-oss:20b-cloud", {"think": "low"}),
     # "model" is the distilled TriageModel inside the triage service: the default, because it is
     # free, offline and 20 ms. An LLM reading is selectable and falls back to the model.
+    # model_version "xlnet-priority-int8" keeps the TriageModel but takes the band from XLNet
+    # (triage app/xlnet.py): gold macro-F1 0.789 vs 0.724, ~80 ms.
     "llm_triage": ("triage", "Score how urgent the customer's message is (the customer side priority).",
                    ("model", "groq", "ollama", "gemini"), "model", "triage_multitask", {"max_tokens": 600, "temperature": 0}),
     "mt_in": ("translation", "Translate what the customer wrote into English.",
@@ -47,6 +49,9 @@ ROLES: dict[str, tuple[str, str, tuple[str, ...], str, str, dict[str, Any]]] = {
     # faster-whisper-small-int8 is the base model alone.
     "speech": ("translation", "Transcribe voice notes in the language they were spoken.",
                ("whisper",), "whisper", "whisper-small-si-run11-int8", {}),
+    # The Tamil model, from the audio service's TAMIL_MODELS (docs/TAMIL-ASR.md).
+    "speech_ta": ("translation", "Transcribe voice notes the audio service heard as Tamil.",
+                  ("whisper",), "whisper", "whisper-small-ta-vasista22-int8", {}),
 }
 DEPARTMENTS = ("default", "network_operations", "technical_support", "billing", "field_service", "retention",
                "sales", "general")

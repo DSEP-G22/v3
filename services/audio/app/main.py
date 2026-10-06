@@ -3,14 +3,16 @@
 Fixes the v2 regression where voice notes were never transcribed: this service is always in
 the path for audio attachments, and an empty transcript is reported as such, not dropped.
 
-Two models: base Whisper small detects the language and transcribes English and Tamil; a
-Sinhala fine-tune transcribes Sinhala, which the base model hears poorly and slowly. Detection
+Three models: base Whisper small detects the language and transcribes English; a Sinhala
+fine-tune transcribes Sinhala, which the base model hears poorly and slowly; a Tamil fine-tune
+transcribes Tamil. Detection
 is narrowed to the three languages a Lanka Link customer speaks, so Sinhala that Whisper
 mistakes for Hindi or Malayalam still lands on the Sinhala model.
 
-The Sinhala model is hot swappable: the `speech` binding (admin, Models page) names one of
-SINHALA_MODELS, and a watcher loads it in the background and swaps it in between notes, with
-no restart. "faster-whisper-small-int8" means no Sinhala model, the base model for everything.
+Both fine-tunes are hot swappable: the `speech` binding (admin, Models page) names one of
+SINHALA_MODELS and the `speech_ta` binding one of TAMIL_MODELS; a watcher loads the choice in
+the background and swaps it in between notes, with no restart. "faster-whisper-small-int8"
+means no fine-tune for that language, the base model.
 """
 
 from __future__ import annotations
@@ -44,44 +46,51 @@ SINHALA_MODELS: dict[str, tuple[str, str | None]] = {
     "whisper-small-si-185k-int8": ("janiduchamika/faster-whisper-small-sinhala-ct2-float16",
                                    "9b9e64f9aee9bd22af26ba93ba7dc93f39b3cc4e"),
 }
+TAMIL_MODELS: dict[str, tuple[str, str | None]] = {
+    # vasista22/whisper-tamil-small (IIT Madras), converted at build (convert.py). Research and
+    # numbers: docs/TAMIL-ASR.md.
+    "whisper-small-ta-vasista22-int8": (os.path.join(MODEL_DIR, "whisper", "ta-vasista22-int8"), None),
+}
 BASE_ONLY = "faster-whisper-small-int8"
-#: What runs before the binding is read, and whenever control cannot be reached at boot.
+#: language -> (binding role, its models). Each language swaps on its own binding.
+FINE_TUNES = {"si": ("speech", SINHALA_MODELS), "ta": ("speech_ta", TAMIL_MODELS)}
+#: What runs before the bindings are read, and whenever control cannot be reached at boot.
 DEFAULT_SPEECH = os.environ.get("SPEECH_MODEL", "whisper-small-si-run11-int8")
+DEFAULT_SPEECH_TA = os.environ.get("SPEECH_TA_MODEL", "whisper-small-ta-vasista22-int8")
 WATCH_S = 10.0
 SPOKEN = ("si", "ta", "en")
 
 http = httpx.AsyncClient(timeout=httpx.Timeout(20.0, connect=3.0), limits=httpx.Limits(max_keepalive_connections=10, keepalive_expiry=20.0))
 model = None
-#: (Sinhala model, its binding id). One tuple, so a swap is a single assignment.
-si: tuple[Any, str] = (None, BASE_ONLY)
+#: language -> (fine-tuned model, its binding id). One tuple each, so a swap is a single assignment.
+fine: dict[str, tuple[Any, str]] = {"si": (None, BASE_ONLY), "ta": (None, BASE_ONLY)}
 _kw: dict[str, Any] = {}
 
 
-def _load(name: str) -> Any:
+def _load(name: str, lang: str = "si") -> Any:
     from faster_whisper import WhisperModel
 
-    path, revision = SINHALA_MODELS[name]
+    path, revision = FINE_TUNES[lang][1][name]
     m = WhisperModel(path, revision=revision, **_kw)
     list(m.transcribe(np.zeros(16000, dtype=np.float32), beam_size=1)[0])  # warm before it takes traffic
     return m
 
 
-async def use(name: str) -> None:
-    """Swap the Sinhala model. The new one loads and warms first; a note already being
+async def use(name: str, lang: str = "si") -> None:
+    """Swap one language's fine-tune. The new one loads and warms first; a note already being
     transcribed keeps the model it started with, and the old one is freed when it finishes."""
-    global si
-    if name == si[1] or (name != BASE_ONLY and name not in SINHALA_MODELS):
+    if name == fine[lang][1] or (name != BASE_ONLY and name not in FINE_TUNES[lang][1]):
         return
     try:
-        loaded = None if name == BASE_ONLY else await asyncio.to_thread(_load, name)
+        loaded = None if name == BASE_ONLY else await asyncio.to_thread(_load, name, lang)
     except Exception:  # noqa: BLE001 - weights missing or unreadable: keep what is running
         return
-    si = (loaded, name)
+    fine[lang] = (loaded, name)
 
 
-async def _bound() -> str | None:
+async def _bound(role: str = "speech") -> str | None:
     with contextlib.suppress(httpx.HTTPError, KeyError, ValueError):
-        r = await http.get(f"{CONTROL_URL}/bindings/speech", timeout=3)
+        r = await http.get(f"{CONTROL_URL}/bindings/{role}", timeout=3)
         r.raise_for_status()
         return r.json()["model_version"]
     return None
@@ -90,8 +99,9 @@ async def _bound() -> str | None:
 async def _watch() -> None:
     while True:
         await asyncio.sleep(WATCH_S)
-        if name := await _bound():
-            await use(name)
+        for lang, (role, _) in FINE_TUNES.items():
+            if name := await _bound(role):
+                await use(name, lang)
 
 
 @contextlib.asynccontextmanager
@@ -106,7 +116,8 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     model = await asyncio.to_thread(WhisperModel, os.environ.get("WHISPER_MODEL", "small"), **{**_kw})
     # Warm: one second of silence through the full decode path.
     await asyncio.to_thread(lambda: list(model.transcribe(np.zeros(16000, dtype=np.float32), beam_size=1)[0]))
-    await use(await _bound() or DEFAULT_SPEECH)
+    await use(await _bound("speech") or DEFAULT_SPEECH, "si")
+    await use(await _bound("speech_ta") or DEFAULT_SPEECH_TA, "ta")
     watcher = asyncio.create_task(_watch())
     yield
     watcher.cancel()
@@ -117,7 +128,7 @@ app = FastAPI(title="Lanka Link audio", lifespan=lifespan, docs_url=None, redoc_
 
 @app.get("/health")
 async def health() -> dict[str, str]:
-    return {"status": "ok" if model else "loading", "speech_model": si[1]}
+    return {"status": "ok" if model else "loading", "speech_model": fine["si"][1], "speech_model_ta": fine["ta"][1]}
 
 
 class In(BaseModel):
@@ -155,8 +166,8 @@ def _transcribe(data: bytes, hint: str | None) -> dict[str, Any]:
                 "note": "longer than a minute"}
     _, _, probs = model.detect_language(audio, vad_filter=True)
     lang = spoken_language(probs, hint)
-    sm, sname = si  # one read: a hot swap mid-note must not change the model under it
-    m = sm if lang == "si" and sm is not None else model
+    fm, fname = fine.get(lang, (None, BASE_ONLY))  # one read: a hot swap mid-note must not change the model under it
+    m = fm if fm is not None else model
     # Greedy, no timestamps, one retry at a higher temperature: a Sinhala note is several times
     # the tokens of an English one, and the default five retries could each re-decode it.
     # Without the Sinhala model, base Whisper keeps detecting for itself (forced Sinhala loops).
@@ -169,7 +180,7 @@ def _transcribe(data: bytes, hint: str | None) -> dict[str, Any]:
         "language": info.language or lang,
         "confidence": weighted([(s.start, s.end, s.avg_logprob) for s in segs]),
         "duration_s": round(duration, 2),
-        "model": sname if m is not model else f"faster-whisper-{os.environ.get('WHISPER_MODEL', 'small')}",
+        "model": fname if m is not model else f"faster-whisper-{os.environ.get('WHISPER_MODEL', 'small')}",
     }
 
 
@@ -210,4 +221,5 @@ if __name__ == "__main__":
     assert spoken_language([("ta", 0.81)], None) == "ta"
     assert spoken_language([("ml", 0.5), ("ta", 0.3)], "ta") == "ta"
     assert set(SINHALA_MODELS) | {BASE_ONLY} >= {DEFAULT_SPEECH}
+    assert set(TAMIL_MODELS) | {BASE_ONLY} >= {DEFAULT_SPEECH_TA}
     print("language routing ok")

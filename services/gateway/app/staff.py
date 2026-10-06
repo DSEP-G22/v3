@@ -231,6 +231,7 @@ SERVICE_URL = {s: os.environ.get(f"{s.upper()}_URL", f"http://{s}:8000") for s i
 #: the bindings and only knowledge may resolve the diagnosis one (tests/architecture).
 NODES: dict[str, tuple[str, str | None]] = {
     "intake": ("inquiry", None), "translate": ("translation", None), "speech": ("audio", None),
+    "speech_ta": ("audio", None),
     "vision": ("image", None), "prefetch": ("business", None), "fusion": ("orchestrator", None),
     "triage": ("triage", "triage"), "diagnose": ("knowledge", "reasoning"), "grounding": ("grounding", None),
     "draft": ("response", "response"), "translate_out": ("translation", None),
