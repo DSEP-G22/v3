@@ -42,16 +42,17 @@ ROLES: dict[str, tuple[str, str, tuple[str, ...], str, str, dict[str, Any]]] = {
     "llm_triage": ("triage", "Score how urgent the customer's message is (the customer side priority).",
                    ("model", "groq", "gemini"), "model", "triage_multitask", {"max_tokens": 600, "temperature": 0}),
     "mt_in": ("translation", "Translate what the customer wrote into English.",
-              ("nllb", "google", "passthrough"), "nllb", "facebook/nllb-200-distilled-600M", {}),
+              ("nllb", "groq", "google", "passthrough"), "nllb", "facebook/nllb-200-distilled-600M", {}),
     "mt_out": ("translation", "Translate the approved reply into the customer's language.",
-               ("nllb", "google", "passthrough"), "nllb", "facebook/nllb-200-distilled-600M", {}),
+               ("nllb", "groq", "google", "passthrough"), "nllb", "facebook/nllb-200-distilled-600M", {}),
     # model_version picks the Sinhala model, swapped live by the audio service (its SINHALA_MODELS);
-    # faster-whisper-small-int8 is the base model alone.
+    # faster-whisper-small-int8 is the base model alone. groq_whisper sends the note to Whisper
+    # large on Groq (audio service GROQ_ASR), with the local model as the fallback.
     "speech": ("translation", "Transcribe voice notes in the language they were spoken.",
-               ("whisper",), "whisper", "whisper-small-si-run11-int8", {}),
+               ("whisper", "groq_whisper"), "whisper", "whisper-small-si-run11-int8", {}),
     # The Tamil model, from the audio service's TAMIL_MODELS (docs/TAMIL-ASR.md).
     "speech_ta": ("translation", "Transcribe voice notes the audio service heard as Tamil.",
-                  ("whisper",), "whisper", "whisper-small-ta-vasista22-int8", {}),
+                  ("whisper", "groq_whisper"), "whisper", "whisper-small-ta-vasista22-int8", {}),
 }
 DEPARTMENTS = ("default", "network_operations", "technical_support", "billing", "field_service", "retention",
                "sales", "general")

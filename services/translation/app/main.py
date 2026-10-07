@@ -18,6 +18,7 @@ from app.lang.langcodes import LanguageCode, base_language, parse
 from app.pipeline import TranslationService
 from app.translate import (
     GoogleTranslator,
+    GroqTranslator,
     PassthroughTranslator,
     Translator,
     build,
@@ -28,24 +29,26 @@ from lanka_common.punctuation import normalise
 CONTROL_URL = os.environ.get("CONTROL_URL", "http://control:8000")
 #: The mt_in / mt_out bindings pick one of these; the baked model is always the safety net.
 backends: dict[str, Translator] = {}
-_bound: dict[str, tuple[float, str]] = {}  # role -> (fetched at, impl)
+_bound: dict[str, tuple[float, str, str]] = {}  # role -> (fetched at, impl, model_version)
 
 
 def _impl(role: str) -> str:
     """The admin's choice for this role, re-read at most every five seconds."""
-    at, impl = _bound.get(role, (0.0, "nllb"))
+    at, impl, model = _bound.get(role, (0.0, "nllb", ""))
     if time.monotonic() - at > 5:
         try:
             with urllib.request.urlopen(f"{CONTROL_URL}/bindings/{role}", timeout=2) as r:
-                impl = json.load(r)["impl"]
+                b = json.load(r)
+                impl, model = b["impl"], b["model_version"]
         except Exception:  # noqa: BLE001 - control unreachable: keep the last known choice
             pass
-        _bound[role] = (time.monotonic(), impl)
-    return impl if impl in backends else "nllb"
+        _bound[role] = (time.monotonic(), impl, model)
+    return impl if impl in backends or impl == "groq" else "nllb"
 
 
 def _svc(role: str) -> TranslationService:
-    return TranslationService(backends[_impl(role)])
+    impl = _impl(role)
+    return TranslationService(GroqTranslator(_bound[role][2]) if impl == "groq" else backends[impl])
 
 
 def _with_fallback(role: str, fn: Any) -> Any:
@@ -76,7 +79,7 @@ async def health() -> dict[str, Any]:
     if not backends:
         return {"status": "loading", "backend": None}
     mt_in, mt_out = await asyncio.to_thread(lambda: (_impl("mt_in"), _impl("mt_out")))
-    return {"status": "ok", "backend": backends["nllb"].name, "mt_in": backends[mt_in].name, "mt_out": backends[mt_out].name}
+    return {"status": "ok", "backend": backends["nllb"].name, "mt_in": mt_in, "mt_out": mt_out}
 
 
 class In(BaseModel):
@@ -121,7 +124,7 @@ async def run_out(body: Out) -> dict[str, Any]:
     target = base_language(parse(body.target))
     text, translated = await asyncio.to_thread(_with_fallback, "mt_out", lambda s: s.translate_outbound(body.text, target))
     return {"text": normalise(text), "translated": translated, "language": target.value,
-            "backend": backends[_impl("mt_out")].name}
+            "backend": _impl("mt_out")}
 
 
 class Sentences(BaseModel):

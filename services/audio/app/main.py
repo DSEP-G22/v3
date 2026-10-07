@@ -52,6 +52,9 @@ TAMIL_MODELS: dict[str, tuple[str, str | None]] = {
     "whisper-small-ta-vasista22-int8": (os.path.join(MODEL_DIR, "whisper", "ta-vasista22-int8"), None),
 }
 BASE_ONLY = "faster-whisper-small-int8"
+#: Whisper large on Groq (binding impl groq_whisper), for either language. The note leaves the
+#: server; if Groq fails the base model transcribes it instead.
+GROQ_ASR = ("whisper-large-v3", "whisper-large-v3-turbo")
 #: language -> (binding role, its models). Each language swaps on its own binding.
 FINE_TUNES = {"si": ("speech", SINHALA_MODELS), "ta": ("speech_ta", TAMIL_MODELS)}
 #: What runs before the bindings are read, and whenever control cannot be reached at boot.
@@ -79,12 +82,12 @@ def _load(name: str, lang: str = "si") -> Any:
 async def use(name: str, lang: str = "si") -> None:
     """Swap one language's fine-tune. The new one loads and warms first; a note already being
     transcribed keeps the model it started with, and the old one is freed when it finishes."""
-    if name != BASE_ONLY and name not in FINE_TUNES[lang][1]:
+    if name != BASE_ONLY and name not in GROQ_ASR and name not in FINE_TUNES[lang][1]:
         name = DEFAULT_SPEECH if lang == "si" else DEFAULT_SPEECH_TA  # a retired or unknown id
     if name == fine[lang][1]:
         return
     try:
-        loaded = None if name == BASE_ONLY else await asyncio.to_thread(_load, name, lang)
+        loaded = None if name == BASE_ONLY or name in GROQ_ASR else await asyncio.to_thread(_load, name, lang)
     except Exception:  # noqa: BLE001 - weights missing or unreadable: keep what is running
         return
     fine[lang] = (loaded, name)
@@ -154,6 +157,23 @@ def spoken_language(probs: list[tuple[str, float]], hint: str | None) -> str:
     return "si"
 
 
+def _groq(audio: np.ndarray, lang: str, name: str) -> tuple[str, float]:
+    """Whisper large on Groq: (text, confidence). 16 kHz mono WAV, so any container works."""
+    import wave
+
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as w:
+        w.setnchannels(1), w.setsampwidth(2), w.setframerate(16000)
+        w.writeframes((np.clip(audio, -1, 1) * 32767).astype(np.int16).tobytes())
+    r = httpx.post(f"{os.environ.get('GROQ_BASE_URL', 'https://api.groq.com/openai/v1')}/audio/transcriptions",
+                   headers={"Authorization": f"Bearer {os.environ['GROQ_API_KEY']}"}, timeout=60,
+                   files={"file": ("note.wav", buf.getvalue(), "audio/wav")},
+                   data={"model": name, "language": lang, "response_format": "verbose_json", "temperature": "0"})
+    r.raise_for_status()
+    segs = r.json().get("segments") or []
+    return r.json()["text"], weighted([(s["start"], s["end"], s["avg_logprob"]) for s in segs])
+
+
 def _transcribe(data: bytes, hint: str | None) -> dict[str, Any]:
     """The language comes from the audio, not from what the customer typed: forcing it from the
     text is wrong when they differ (a Sinhala speaker typing English, say) and far slower, since a
@@ -169,6 +189,11 @@ def _transcribe(data: bytes, hint: str | None) -> dict[str, Any]:
     _, _, probs = model.detect_language(audio, vad_filter=True)
     lang = spoken_language(probs, hint)
     fm, fname = fine.get(lang, (None, BASE_ONLY))  # one read: a hot swap mid-note must not change the model under it
+    if fname in GROQ_ASR:
+        with contextlib.suppress(Exception):  # Groq down, no key, rate limited: the base model below
+            text, conf = _groq(audio, lang, fname)
+            return {"text": normalise(text.strip()), "language": lang, "confidence": conf,
+                    "duration_s": round(duration, 2), "model": f"groq:{fname}"}
     m = fm if fm is not None else model
     # Greedy, no timestamps, one retry at a higher temperature: a Sinhala note is several times
     # the tokens of an English one, and the default five retries could each re-decode it.

@@ -153,6 +153,42 @@ class GoogleTranslator:
         raise RuntimeError("google translate returned nothing")
 
 
+_NAMES = {LanguageCode.EN: "English", LanguageCode.SI: "Sinhala", LanguageCode.TA: "Tamil"}
+
+
+class GroqTranslator:
+    """Cloud backend: an LLM on Groq (the mt_in / mt_out binding's model). Text leaves the machine.
+    Raises on any failure, and on a dropped or changed number, so the caller falls back to NLLB."""
+
+    name = "groq"
+
+    def __init__(self, model: str) -> None:
+        self.model = model
+
+    def translate(self, text, source_language, target_language=LanguageCode.EN):
+        import httpx
+
+        src = base_language(source_language)
+        if not text.strip() or src == target_language:
+            return TranslationResult(source_text=text, translated_text=text, source_language=source_language,
+                                     target_language=target_language, backend=self.name)
+        r = httpx.post(f"{os.environ.get('GROQ_BASE_URL', 'https://api.groq.com/openai/v1')}/chat/completions",
+                       headers={"Authorization": f"Bearer {os.environ['GROQ_API_KEY']}"}, timeout=30,
+                       json={"model": self.model, "temperature": 0, "max_tokens": 1024,
+                             **({"reasoning_effort": "low"} if self.model.startswith("openai/gpt-oss") else {}),
+                             "messages": [{"role": "system", "content":
+                                           f"Translate the user's {_NAMES.get(src, src.value)} text into "
+                                           f"{_NAMES.get(target_language, target_language.value)}. Keep numbers, "
+                                           "codes and links exactly as written. Reply with the translation only."},
+                                          {"role": "user", "content": text}]})
+        r.raise_for_status()
+        out = r.json()["choices"][0]["message"]["content"].strip()
+        if not out or not numbers_kept(text, out):
+            raise RuntimeError("groq translation empty or changed a number")
+        return TranslationResult(source_text=text, translated_text=out, source_language=source_language,
+                                 target_language=target_language, backend=self.name)
+
+
 def build() -> Translator:
     backend = os.environ.get("LANKA_TR_BACKEND", "auto")
     model_dir = Path(os.environ.get("MODEL_DIR", "/models")) / "nllb-600m-ct2"

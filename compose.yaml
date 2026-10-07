@@ -276,6 +276,7 @@ services:
       TRANSLATE_URL: http://translation:8000
       # The speech binding picks the Sinhala model; the service re-reads it every 10 s (hot swap).
       CONTROL_URL: http://control:8000
+      GROQ_API_KEY: ${GROQ_API_KEY:-}  # speech bound to groq_whisper
       OMP_NUM_THREADS: "${MODEL_CPUS:-4}"
     cpus: ${MODEL_CPUS:-4}
     restart: unless-stopped
@@ -299,6 +300,7 @@ services:
     environment:
       OMP_NUM_THREADS: "${MODEL_CPUS:-4}"
       LANKA_TR_BACKEND: ${LANKA_TR_BACKEND:-auto}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}  # mt_in / mt_out bound to groq
     cpus: ${MODEL_CPUS:-4}
     restart: unless-stopped
 

@@ -85,6 +85,8 @@ const MODELS: Record<string, string[]> = {
   passthrough: ["none"],
   // Sinhala (speech) and Tamil (speech_ta) models the audio service swaps in live; the last is the base model alone.
   whisper: ["whisper-small-si-run11-int8", "whisper-small-si-dehanns-lora-int8", "whisper-small-ta-vasista22-int8", "faster-whisper-small-int8"],
+  // Whisper large on Groq: the note leaves the server; the local model takes over if Groq fails.
+  groq_whisper: ["whisper-large-v3", "whisper-large-v3-turbo"],
 };
 
 /** The details window's halo: the glow box's light, outside the window. */
